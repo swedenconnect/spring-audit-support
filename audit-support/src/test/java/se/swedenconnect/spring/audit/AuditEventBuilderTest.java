@@ -16,7 +16,8 @@
 package se.swedenconnect.spring.audit;
 
 import org.junit.jupiter.api.Test;
-import se.swedenconnect.spring.audit.support.CorrelationID;
+import se.swedenconnect.spring.audit.tracing.CorrelationID;
+import se.swedenconnect.spring.audit.tracing.TraceID;
 import se.swedenconnect.spring.audit.value.StringAuditValue;
 
 import java.time.Clock;
@@ -199,7 +200,17 @@ class AuditEventBuilderTest {
         .traceId("0af7651916cd43dd8448eb211c80319c")
         .build();
 
-    assertThat(event.getTraceId()).isEqualTo("0af7651916cd43dd8448eb211c80319c");
+    assertThat(event.getTraceId()).isEqualTo(TraceID.of("0af7651916cd43dd8448eb211c80319c"));
+  }
+
+  @Test
+  void testTraceIdAsValueType() {
+    final AuditEvent event = AuditEventBuilder.builder()
+        .type("login")
+        .traceId(TraceID.of("0af7651916cd43dd8448eb211c80319c"))
+        .build();
+
+    assertThat(event.getTraceId()).isEqualTo(TraceID.of("0af7651916cd43dd8448eb211c80319c"));
   }
 
   @Test
@@ -208,7 +219,7 @@ class AuditEventBuilderTest {
         .type("login")
         .applicationName((String) null)
         .correlationId((String) null)
-        .traceId(null)
+        .traceId((String) null)
         .build();
 
     assertThat(event.getApplicationName()).isNull();

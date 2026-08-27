@@ -32,7 +32,8 @@ import se.swedenconnect.spring.audit.AuditEventContext;
 import se.swedenconnect.spring.audit.AuditEventContextResolver;
 import se.swedenconnect.spring.audit.DefaultAuditEventContextResolver;
 import se.swedenconnect.spring.audit.support.ApplicationName;
-import se.swedenconnect.spring.audit.support.CorrelationID;
+import se.swedenconnect.spring.audit.tracing.CorrelationID;
+import se.swedenconnect.spring.audit.tracing.TraceID;
 import se.swedenconnect.spring.audit.transform.EventTransformer;
 
 import java.io.Serial;
@@ -216,7 +217,7 @@ class AuditSupportAutoConfigurationTest {
         }
 
         @Override
-        public @Nullable String getTraceId() {
+        public @Nullable TraceID getTraceId() {
           return null;
         }
 

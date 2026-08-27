@@ -13,11 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package se.swedenconnect.spring.audit.support;
+package se.swedenconnect.spring.audit.tracing;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.slf4j.MDC;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -29,11 +27,6 @@ import static org.assertj.core.api.Assertions.assertThatNullPointerException;
  * @author Martin Lindström
  */
 class CorrelationIDTest {
-
-  @AfterEach
-  void clear() {
-    MDC.clear();
-  }
 
   @Test
   void testCreate() {
@@ -68,24 +61,6 @@ class CorrelationIDTest {
     assertThat(id).isNotEqualTo(CorrelationID.of("other"));
     assertThat(id).isNotEqualTo(null);
     assertThat(id.equals("abc-123")).isFalse();
-  }
-
-  @Test
-  void testMdcPutAndFromMDC() {
-    assertThat(CorrelationID.fromMDC()).isNull();
-
-    CorrelationID.of("abc-123").mdcPut();
-
-    assertThat(MDC.get(CorrelationID.MDC_KEY)).isEqualTo("abc-123");
-    assertThat(CorrelationID.fromMDC()).isEqualTo(CorrelationID.of("abc-123"));
-  }
-
-  @Test
-  void testFromMdcWithEmptyValue() {
-    // An empty value in MDC can not be turned into a CorrelationID - fromMDC handles this and returns null.
-    MDC.put(CorrelationID.MDC_KEY, "");
-
-    assertThat(CorrelationID.fromMDC()).isNull();
   }
 
 }

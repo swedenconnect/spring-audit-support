@@ -21,7 +21,7 @@ import org.springframework.boot.actuate.audit.AuditEvent;
 import se.swedenconnect.spring.audit.AuditEventBuilder;
 import se.swedenconnect.spring.audit.AuditType;
 import se.swedenconnect.spring.audit.support.ApplicationName;
-import se.swedenconnect.spring.audit.support.CorrelationID;
+import se.swedenconnect.spring.audit.tracing.CorrelationID;
 
 import java.time.Instant;
 import java.util.ArrayList;

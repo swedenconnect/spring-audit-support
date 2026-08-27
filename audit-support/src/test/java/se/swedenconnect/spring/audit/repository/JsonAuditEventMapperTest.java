@@ -21,7 +21,7 @@ import org.slf4j.MDC;
 import se.swedenconnect.spring.audit.AuditEvent;
 import se.swedenconnect.spring.audit.AuditEventBuilder;
 import se.swedenconnect.spring.audit.support.ApplicationName;
-import se.swedenconnect.spring.audit.support.CorrelationID;
+import se.swedenconnect.spring.audit.tracing.CorrelationID;
 import se.swedenconnect.spring.audit.value.MapAuditValue;
 import se.swedenconnect.spring.audit.value.StringAuditValue;
 import tools.jackson.databind.json.JsonMapper;
@@ -66,6 +66,31 @@ class JsonAuditEventMapperTest {
         .contains("\"principal\":\"alice\"")
         .contains("\"session\":\"S1\"")
         .contains("\"data\":{");
+  }
+
+  @Test
+  void testWriteProducesExactJson() {
+    // Guards the wire format of a structured audit event - the JSON must not change when the Java types of the
+    // fields change.
+    final AuditEvent event = AuditEventBuilder.builder()
+        .type("login")
+        .timestamp(TIMESTAMP)
+        .applicationName("my-app")
+        .correlationId("corr-123")
+        .traceId("4bf92f3577b34da6a3ce929d0e0e4736")
+        .principal("alice")
+        .rootField(new StringAuditValue("session", "S1"))
+        .dataField(new StringAuditValue("ip", "1.2.3.4"))
+        .build();
+
+    assertThat(this.mapper.write(event)).isEqualTo("{\"type\":\"login\","
+        + "\"timestamp\":\"2026-08-02T10:15:30Z\","
+        + "\"application_name\":\"my-app\","
+        + "\"correlation_id\":\"corr-123\","
+        + "\"trace_id\":\"4bf92f3577b34da6a3ce929d0e0e4736\","
+        + "\"principal\":\"alice\","
+        + "\"data\":{\"ip\":\"1.2.3.4\"},"
+        + "\"session\":\"S1\"}");
   }
 
   @Test

@@ -23,7 +23,10 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
 import se.swedenconnect.spring.audit.support.ApplicationName;
-import se.swedenconnect.spring.audit.support.CorrelationID;
+import se.swedenconnect.spring.audit.tracing.CorrelationID;
+import se.swedenconnect.spring.audit.tracing.CorrelationIDHolder;
+import se.swedenconnect.spring.audit.tracing.TraceID;
+import se.swedenconnect.spring.audit.tracing.TraceIDWriter;
 
 import java.util.List;
 
@@ -58,25 +61,34 @@ class DefaultAuditEventContextResolverTest {
   }
 
   @Test
-  void testCorrelationIdFromMdc() {
-    CorrelationID.of("abc-123").mdcPut();
+  void testCorrelationIdFromHolder() {
+    CorrelationIDHolder.set(CorrelationID.of("abc-123"));
     final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null);
 
     assertThat(resolver.getContext(null).getCorrelationId()).isEqualTo(CorrelationID.of("abc-123"));
   }
 
   @Test
-  void testNoCorrelationIdInMdc() {
+  void testNoCorrelationId() {
     final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null);
 
     assertThat(resolver.getContext(null).getCorrelationId()).isNull();
   }
 
   @Test
-  void testTraceIdIsAlwaysNull() {
+  void testNoTraceId() {
     final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null);
 
     assertThat(resolver.getContext(null).getTraceId()).isNull();
+  }
+
+  @Test
+  void testTraceIdFromHolder() {
+    TraceIDWriter.set(TraceID.of("4bf92f3577b34da6a3ce929d0e0e4736"));
+    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null);
+
+    assertThat(resolver.getContext(null).getTraceId())
+        .isEqualTo(TraceID.of("4bf92f3577b34da6a3ce929d0e0e4736"));
   }
 
   @Test
@@ -135,7 +147,7 @@ class DefaultAuditEventContextResolverTest {
 
   @Test
   void testInputIsIgnored() {
-    CorrelationID.of("abc-123").mdcPut();
+    CorrelationIDHolder.set(CorrelationID.of("abc-123"));
     SecurityContextHolder.getContext().setAuthentication(
         UsernamePasswordAuthenticationToken.authenticated("alice", null, List.of()));
     final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null);
@@ -153,7 +165,7 @@ class DefaultAuditEventContextResolverTest {
     assertThat(context.getCorrelationId()).isNull();
     assertThat(context.getPrincipal()).isNull();
 
-    CorrelationID.of("abc-123").mdcPut();
+    CorrelationIDHolder.set(CorrelationID.of("abc-123"));
     SecurityContextHolder.getContext().setAuthentication(
         UsernamePasswordAuthenticationToken.authenticated("alice", null, List.of()));
 
