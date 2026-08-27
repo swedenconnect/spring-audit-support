@@ -21,7 +21,10 @@ import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import se.swedenconnect.spring.audit.support.ApplicationName;
-import se.swedenconnect.spring.audit.support.CorrelationID;
+import se.swedenconnect.spring.audit.tracing.CorrelationID;
+import se.swedenconnect.spring.audit.tracing.CorrelationIDHolder;
+import se.swedenconnect.spring.audit.tracing.TraceID;
+import se.swedenconnect.spring.audit.tracing.TraceIDHolder;
 
 /**
  * Default implementation of the {@link AuditEventContextResolver}.
@@ -30,8 +33,10 @@ import se.swedenconnect.spring.audit.support.CorrelationID;
  * </p>
  * <ul>
  *   <li>{@link AuditEventContext#getApplicationName()} - Returns the configured application name.</li>
- *   <li>{@link AuditEventContext#getCorrelationId()} - Returns the CorrelationID currently stored in MDC ({@link CorrelationID#fromMDC()}), which can be {@code null}.</li>
- *   <li>{@link AuditEventContext#getTraceId()} - Always returns {@code null}.</li>
+ *   <li>{@link AuditEventContext#getCorrelationId()} - Returns the {@link CorrelationID} of the current flow, see
+ *   {@link CorrelationIDHolder}, which can be {@code null}.</li>
+ *   <li>{@link AuditEventContext#getTraceId()} - Returns the {@link TraceID} of the current request, see
+ *   {@link TraceIDHolder}, which can be {@code null}.</li>
  *   <li>{@link AuditEventContext#getPrincipal()} - Gets the name of the currently authenticated user, i.e., the name of
  *   the {@link Authentication} object held by the current {@link SecurityContextHolder security context}. If there is no
  *   authenticated user, i.e., if there is no {@link Authentication} object, if it is not authenticated, or if it is an
@@ -39,8 +44,10 @@ import se.swedenconnect.spring.audit.support.CorrelationID;
  *   {@link #setDefaultPrincipal(String) default principal} is returned (which may be {@code null}).</li>
  * </ul>
  * <p>
- * All values are resolved from thread bound state, meaning that the {@code input} parameter of
- * {@link #getContext(Object)} is ignored by this implementation.
+ * All values are resolved from the state of the current flow - the identifiers from the installed
+ * {@link se.swedenconnect.spring.audit.tracing.IdentifierStorage IdentifierStorage} and the principal from the Spring
+ * Security context - meaning that the {@code input} parameter of {@link #getContext(Object)} is ignored by this
+ * implementation.
  * </p>
  *
  * @author Martin Lindström
@@ -66,8 +73,8 @@ public class DefaultAuditEventContextResolver implements AuditEventContextResolv
   }
 
   /**
-   * Returns an {@link AuditEventContext} holding the configured application name, the {@link CorrelationID} currently
-   * stored in MDC, a {@code null} trace ID, and the name of the currently authenticated user (or the configured
+   * Returns an {@link AuditEventContext} holding the configured application name, the {@link CorrelationID} and
+   * {@link TraceID} of the current flow, and the name of the currently authenticated user (or the configured
    * {@link #setDefaultPrincipal(String) default principal} if there is no authenticated user).
    * <p>
    * The {@code input} parameter is not used by this implementation.
@@ -87,12 +94,12 @@ public class DefaultAuditEventContextResolver implements AuditEventContextResolv
 
       @Override
       public @Nullable CorrelationID getCorrelationId() {
-        return CorrelationID.fromMDC();
+        return CorrelationIDHolder.get();
       }
 
       @Override
-      public @Nullable String getTraceId() {
-        return null;
+      public @Nullable TraceID getTraceId() {
+        return TraceIDHolder.get();
       }
 
       @Override

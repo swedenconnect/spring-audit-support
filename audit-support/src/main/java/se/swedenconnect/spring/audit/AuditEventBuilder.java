@@ -18,7 +18,8 @@ package se.swedenconnect.spring.audit;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import se.swedenconnect.spring.audit.support.ApplicationName;
-import se.swedenconnect.spring.audit.support.CorrelationID;
+import se.swedenconnect.spring.audit.tracing.CorrelationID;
+import se.swedenconnect.spring.audit.tracing.TraceID;
 import se.swedenconnect.spring.audit.value.AuditValue;
 
 import java.io.Serializable;
@@ -52,7 +53,7 @@ public class AuditEventBuilder {
   private CorrelationID correlationId;
 
   /** The trace ID. */
-  private String traceId;
+  private TraceID traceId;
 
   /** Root fields. */
   private List<AuditValue<? extends Serializable>> rootFields;
@@ -240,8 +241,19 @@ public class AuditEventBuilder {
    * @param traceId the trace ID (or {@code null})
    * @return this builder
    */
-  public @NonNull AuditEventBuilder traceId(final @Nullable String traceId) {
+  public @NonNull AuditEventBuilder traceId(final @Nullable TraceID traceId) {
     this.traceId = traceId;
+    return this;
+  }
+
+  /**
+   * Assigns the trace ID given its string representation.
+   *
+   * @param traceId the trace ID (or {@code null})
+   * @return this builder
+   */
+  public @NonNull AuditEventBuilder traceId(final @Nullable String traceId) {
+    this.traceId = traceId != null ? TraceID.of(traceId) : null;
     return this;
   }
 

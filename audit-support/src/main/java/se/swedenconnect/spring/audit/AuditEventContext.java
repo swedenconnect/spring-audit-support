@@ -17,7 +17,8 @@ package se.swedenconnect.spring.audit;
 
 import org.jspecify.annotations.Nullable;
 import se.swedenconnect.spring.audit.support.ApplicationName;
-import se.swedenconnect.spring.audit.support.CorrelationID;
+import se.swedenconnect.spring.audit.tracing.CorrelationID;
+import se.swedenconnect.spring.audit.tracing.TraceID;
 
 /**
  * Context that may be used by an {@link se.swedenconnect.spring.audit.transform.EventTransformer EventTransformer} when
@@ -58,7 +59,7 @@ public interface AuditEventContext {
    *
    * @return the trace ID, or {@code null}
    */
-  @Nullable String getTraceId();
+  @Nullable TraceID getTraceId();
 
   /**
    * Gets the principal, i.e., the initiator of the audited operation.

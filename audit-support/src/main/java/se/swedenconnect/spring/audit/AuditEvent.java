@@ -24,7 +24,8 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import se.swedenconnect.spring.audit.support.ApplicationName;
-import se.swedenconnect.spring.audit.support.CorrelationID;
+import se.swedenconnect.spring.audit.tracing.CorrelationID;
+import se.swedenconnect.spring.audit.tracing.TraceID;
 import se.swedenconnect.spring.audit.value.AuditValue;
 import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.annotation.JsonNaming;
@@ -143,7 +144,7 @@ public class AuditEvent extends org.springframework.boot.actuate.audit.AuditEven
 
   /** W3C Trace Context trace-id. */
   @JsonProperty(value = "trace_id", required = false)
-  private final String traceId;
+  private final TraceID traceId;
 
   /** Additional root fields. */
   private final Map<String, Serializable> rootFields;
@@ -164,7 +165,7 @@ public class AuditEvent extends org.springframework.boot.actuate.audit.AuditEven
    */
   public AuditEvent(final @NonNull AuditType type, final @Nullable Instant timestamp,
       final @Nullable ApplicationName applicationName, final @Nullable CorrelationID correlationId,
-      final @Nullable String traceId, final @Nullable String principal,
+      final @Nullable TraceID traceId, final @Nullable String principal,
       final @Nullable List<AuditValue<? extends Serializable>> rootFields,
       final @Nullable List<AuditValue<? extends Serializable>> dataFields) {
     super(Optional.ofNullable(timestamp).orElseGet(Instant::now), principal, type.type(), buildDataMap(dataFields));
@@ -184,7 +185,7 @@ public class AuditEvent extends org.springframework.boot.actuate.audit.AuditEven
    * Creates an {@link AuditEvent} from its parsed JSON representation. Used by Jackson when deserializing an audit
    * event.
    * <p>
-   * Unlike {@link #AuditEvent(AuditType, Instant, ApplicationName, CorrelationID, String, String, List, List)}, the
+   * Unlike {@link #AuditEvent(AuditType, Instant, ApplicationName, CorrelationID, TraceID, String, List, List)}, the
    * fields are assigned verbatim from the parsed representation, i.e., there is <em>no</em> fall back to the MDC for
    * the correlation ID. Any properties that are not part of the base structure are collected as
    * {@link #getRootFields() root fields}.
@@ -229,7 +230,7 @@ public class AuditEvent extends org.springframework.boot.actuate.audit.AuditEven
         data != null ? data : Map.of());
     this.applicationName = applicationName != null ? new ApplicationName(applicationName) : null;
     this.correlationId = correlationId != null ? new CorrelationID(correlationId) : null;
-    this.traceId = traceId;
+    this.traceId = traceId != null ? new TraceID(traceId) : null;
     this.rootFields = new LinkedHashMap<>();
   }
 
@@ -280,7 +281,7 @@ public class AuditEvent extends org.springframework.boot.actuate.audit.AuditEven
    *
    * @return the trace ID, or {@code null} if not available
    */
-  public @Nullable String getTraceId() {
+  public @Nullable TraceID getTraceId() {
     return this.traceId;
   }
 
