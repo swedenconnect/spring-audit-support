@@ -84,7 +84,8 @@ to be registered for it.
 | `transform` | `EventTransformer`, `SingleEventTransformer` (for a single event class), and the built-in system started/shutdown transformers |
 | `appevents` | Application events that transform themselves: `SystemAlertEvent` and the `AbstractErrorEvent` base class |
 | `repository` | `ExtendedAuditEventRepository` (predicate-based find) and the implementations: in-memory, file, JDBC/MongoDB (via `AuditEventDao`), Redis, syslog, plus `DelegatingAuditEventRepository` |
-| `support` | `ApplicationName` and `CorrelationID` (the latter is MDC-backed) |
+| `support` | `ApplicationName` |
+| `tracing` | `CorrelationID` / `TraceID` value types, the `CorrelationIDHolder` / `TraceIDHolder` static gateways, and the pluggable `IdentifierStorage` (MDC-backed by default) |
 
 ### Notable details
 
@@ -95,6 +96,9 @@ to be registered for it.
   `LibraryVersionTest` to verify the version constant stays in sync with the POM.
 - `AuditEventBuilder.builder(AuditEventContext)` initializes a builder from a context (application name, correlation
   ID, trace ID, principal). Transformers normally start there.
+- Identifiers are never read from MDC directly. `CorrelationIDHolder` / `TraceIDHolder` read and write through the
+  installed `IdentifierStorage`, so that a reactive application can replace the thread-bound default. See
+  [docs/tracing.md](../docs/tracing.md).
 - A repository that cannot serve queries returns `false` from `supportsFind()`, and its `find` methods return an empty
   list.
 
