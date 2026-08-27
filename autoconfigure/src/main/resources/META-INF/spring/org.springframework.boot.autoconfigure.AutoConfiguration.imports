@@ -1,0 +1,2 @@
+se.swedenconnect.spring.audit.autoconfigure.AuditSupportAutoConfiguration
+se.swedenconnect.spring.audit.autoconfigure.AuditRepositoryAutoConfiguration

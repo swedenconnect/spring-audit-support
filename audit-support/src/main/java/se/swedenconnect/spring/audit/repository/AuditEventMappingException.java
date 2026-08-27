@@ -1,0 +1,57 @@
+/*
+ * Copyright 2026 Sweden Connect
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package se.swedenconnect.spring.audit.repository;
+
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import se.swedenconnect.spring.audit.LibraryVersion;
+
+import java.io.Serial;
+
+/**
+ * Exception thrown by an {@link AuditEventMapper} when an audit event can not be serialized to, or deserialized from,
+ * its string representation.
+ * <p>
+ * This is an unchecked exception so that callers are not coupled to the underlying serialization library.
+ * </p>
+ *
+ * @author Martin Lindström
+ */
+public class AuditEventMappingException extends RuntimeException {
+
+  @Serial
+  private static final long serialVersionUID = LibraryVersion.SERIAL_VERSION_UID;
+
+  /**
+   * Constructor.
+   *
+   * @param message the detail message
+   */
+  public AuditEventMappingException(final @NonNull String message) {
+    super(message);
+  }
+
+  /**
+   * Constructor.
+   *
+   * @param message the detail message
+   * @param cause the underlying cause
+   */
+  public AuditEventMappingException(final @NonNull String message, final @Nullable Throwable cause) {
+    super(message, cause);
+  }
+
+}
