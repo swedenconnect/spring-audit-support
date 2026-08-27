@@ -30,11 +30,37 @@ public class AuditSupportProperties {
   public static final String PREFIX = "audit";
 
   /**
+   * Whether the application lifecycle should be audited, i.e., whether a system_started event should be created when
+   * the application has started, and a system_shutdown event when it is shutting down. The default is true.
+   */
+  private boolean logLifecycleEvents = true;
+
+  /**
    * The principal name offered to the audit event transformers when no user is authenticated. If not assigned, no
    * principal is offered in these cases, but a transformer may still assign a principal of its own to the audit events
    * it creates. A commonly used value is "system".
    */
   private @Nullable String defaultPrincipal;
+
+  /**
+   * Tells whether the application lifecycle should be audited.
+   *
+   * @return whether the application lifecycle should be audited
+   */
+  public boolean isLogLifecycleEvents() {
+    return this.logLifecycleEvents;
+  }
+
+  /**
+   * Assigns whether the application lifecycle should be audited, i.e., whether a system_started event should be
+   * created when the application has started, and a system_shutdown event when it is shutting down. The default is
+   * true.
+   *
+   * @param logLifecycleEvents whether the application lifecycle should be audited
+   */
+  public void setLogLifecycleEvents(final boolean logLifecycleEvents) {
+    this.logLifecycleEvents = logLifecycleEvents;
+  }
 
   /**
    * Gets the principal name offered to the audit event transformers when no user is authenticated.

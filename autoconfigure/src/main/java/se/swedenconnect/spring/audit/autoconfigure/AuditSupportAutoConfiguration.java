@@ -23,6 +23,7 @@ import org.springframework.beans.factory.BeanCreationException;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.info.BuildProperties;
@@ -33,6 +34,8 @@ import se.swedenconnect.spring.audit.AuditApplicationListener;
 import se.swedenconnect.spring.audit.AuditEvent;
 import se.swedenconnect.spring.audit.AuditEventContextResolver;
 import se.swedenconnect.spring.audit.DefaultAuditEventContextResolver;
+import se.swedenconnect.spring.audit.transform.ApplicationReadyEventTransformer;
+import se.swedenconnect.spring.audit.transform.ContextClosedEventTransformer;
 import se.swedenconnect.spring.audit.transform.EventTransformer;
 import se.swedenconnect.spring.audit.support.ApplicationName;
 
@@ -40,8 +43,9 @@ import se.swedenconnect.spring.audit.support.ApplicationName;
  * Auto-configuration for the Sweden Connect Spring Audit support.
  * <p>
  * Registers an {@link AuditApplicationListener} wired with all {@link EventTransformer} beans found in the application
- * context, an {@link AuditEventContextResolver} and an {@link ApplicationName} bean. All of them are only created if
- * the application has not already declared beans of these types.
+ * context, an {@link AuditEventContextResolver} and an {@link ApplicationName} bean, together with the
+ * {@link ApplicationReadyEventTransformer} and {@link ContextClosedEventTransformer} that audit the application
+ * lifecycle. All of them are only created if the application has not already declared beans of these types.
  * </p>
  *
  * @author Martin Lindström
@@ -83,6 +87,40 @@ public class AuditSupportAutoConfiguration {
     final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(applicationName);
     resolver.setDefaultPrincipal(properties.getDefaultPrincipal());
     return resolver;
+  }
+
+  /**
+   * Creates the {@link ApplicationReadyEventTransformer} bean, so that the application start is audited.
+   * <p>
+   * The bean is not created if the application has declared an {@link ApplicationReadyEventTransformer} bean of its
+   * own, or if {@code audit.log-lifecycle-events} is {@code false}.
+   * </p>
+   *
+   * @return an {@link ApplicationReadyEventTransformer}
+   */
+  @Bean
+  @ConditionalOnMissingBean
+  @ConditionalOnProperty(prefix = AuditSupportProperties.PREFIX, name = "log-lifecycle-events",
+      havingValue = "true", matchIfMissing = true)
+  @NonNull ApplicationReadyEventTransformer applicationReadyEventTransformer() {
+    return new ApplicationReadyEventTransformer();
+  }
+
+  /**
+   * Creates the {@link ContextClosedEventTransformer} bean, so that the application shutdown is audited.
+   * <p>
+   * The bean is not created if the application has declared a {@link ContextClosedEventTransformer} bean of its own,
+   * or if {@code audit.log-lifecycle-events} is {@code false}.
+   * </p>
+   *
+   * @return a {@link ContextClosedEventTransformer}
+   */
+  @Bean
+  @ConditionalOnMissingBean
+  @ConditionalOnProperty(prefix = AuditSupportProperties.PREFIX, name = "log-lifecycle-events",
+      havingValue = "true", matchIfMissing = true)
+  @NonNull ContextClosedEventTransformer contextClosedEventTransformer() {
+    return new ContextClosedEventTransformer();
   }
 
   /**

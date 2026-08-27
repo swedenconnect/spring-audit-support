@@ -35,7 +35,7 @@ public class ApplicationReadyEventTransformer implements SingleEventTransformer<
   /** {@inheritDoc} */
   @Override
   public @NonNull AuditEvent transformEvent(
-      @NonNull final ApplicationReadyEvent event, final @NonNull AuditEventContext context) {
+      final @NonNull ApplicationReadyEvent event, final @NonNull AuditEventContext context) {
     return AuditEventBuilder.builder(context)
         .type("system_started")
         .timestamp(Instant.ofEpochMilli(event.getTimestamp()))

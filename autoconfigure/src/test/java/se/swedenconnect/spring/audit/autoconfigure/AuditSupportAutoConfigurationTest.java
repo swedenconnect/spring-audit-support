@@ -19,10 +19,14 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.actuate.audit.AuditEventRepository;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.ApplicationEvent;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import se.swedenconnect.spring.audit.AuditApplicationListener;
@@ -34,9 +38,13 @@ import se.swedenconnect.spring.audit.DefaultAuditEventContextResolver;
 import se.swedenconnect.spring.audit.support.ApplicationName;
 import se.swedenconnect.spring.audit.tracing.CorrelationID;
 import se.swedenconnect.spring.audit.tracing.TraceID;
+import se.swedenconnect.spring.audit.transform.ApplicationReadyEventTransformer;
+import se.swedenconnect.spring.audit.transform.ContextClosedEventTransformer;
 import se.swedenconnect.spring.audit.transform.EventTransformer;
 
 import java.io.Serial;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
@@ -53,6 +61,15 @@ class AuditSupportAutoConfigurationTest {
       .withConfiguration(AutoConfigurations.of(AuditSupportAutoConfiguration.class))
       .withPropertyValues("spring.application.name=test-app");
 
+  /**
+   * A runner that also loads Spring Boot's own audit auto-configuration, whose {@code AuditListener} is what writes a
+   * published {@code AuditApplicationEvent} to the {@link AuditEventRepository}.
+   */
+  private ApplicationContextRunner auditingRunner() {
+    return this.runner.withConfiguration(AutoConfigurations.of(
+        org.springframework.boot.actuate.autoconfigure.audit.AuditAutoConfiguration.class));
+  }
+
   @AfterEach
   void clear() {
     SecurityContextHolder.clearContext();
@@ -65,6 +82,72 @@ class AuditSupportAutoConfigurationTest {
       assertThat(context).hasSingleBean(AuditEventContextResolver.class);
       assertThat(context).hasSingleBean(AuditApplicationListener.class);
       assertThat(context.getBean(ApplicationName.class)).isEqualTo(new ApplicationName("test-app"));
+    });
+  }
+
+  @Test
+  void testLifecycleTransformersAreRegistered() {
+    this.runner.run(context -> {
+      assertThat(context).hasSingleBean(ApplicationReadyEventTransformer.class);
+      assertThat(context).hasSingleBean(ContextClosedEventTransformer.class);
+    });
+  }
+
+  @Test
+  void testLifecycleTransformersCanBeTurnedOff() {
+    this.runner.withPropertyValues("audit.log-lifecycle-events=false").run(context -> {
+      assertThat(context).doesNotHaveBean(ApplicationReadyEventTransformer.class);
+      assertThat(context).doesNotHaveBean(ContextClosedEventTransformer.class);
+
+      // The rest of the audit support is unaffected.
+      assertThat(context).hasSingleBean(AuditApplicationListener.class);
+    });
+  }
+
+  @Test
+  void testLifecycleTransformersBackOffWhenUserBeansArePresent() {
+    final ApplicationReadyEventTransformer readyTransformer = new ApplicationReadyEventTransformer();
+    final ContextClosedEventTransformer closedTransformer = new ContextClosedEventTransformer();
+
+    this.runner
+        .withBean(ApplicationReadyEventTransformer.class, () -> readyTransformer)
+        .withBean(ContextClosedEventTransformer.class, () -> closedTransformer)
+        .run(context -> {
+          assertThat(context.getBean(ApplicationReadyEventTransformer.class)).isSameAs(readyTransformer);
+          assertThat(context.getBean(ContextClosedEventTransformer.class)).isSameAs(closedTransformer);
+        });
+  }
+
+  @Test
+  void testStartupIsAudited() {
+    this.auditingRunner().withBean(AuditEventRepository.class, RecordingRepository::new).run(context -> {
+      final RecordingRepository repository = (RecordingRepository) context.getBean(AuditEventRepository.class);
+
+      // The ApplicationContextRunner does not publish ApplicationReadyEvent, so it is published here.
+      context.publishEvent(new ApplicationReadyEvent(
+          new SpringApplication(), new String[0], (ConfigurableApplicationContext) context.getSourceApplicationContext(),
+          null));
+
+      assertThat(repository.events).extracting(org.springframework.boot.actuate.audit.AuditEvent::getType)
+          .containsExactly("system_started");
+      assertThat(repository.events.getFirst().getPrincipal()).isEqualTo(AuditEvent.SYSTEM_PRINCIPAL);
+    });
+  }
+
+  @Test
+  void testShutdownIsAuditedWhileTheRepositoryIsStillUsable() {
+    final RecordingRepository repository = new RecordingRepository();
+
+    this.auditingRunner().withBean(AuditEventRepository.class, () -> repository).run(context -> {
+      assertThat(repository.events).isEmpty();
+
+      // ContextClosedEvent is published before the beans of the context are destroyed, so the repository must still
+      // be able to write the event.
+      ((ConfigurableApplicationContext) context.getSourceApplicationContext()).close();
+
+      assertThat(repository.events).extracting(org.springframework.boot.actuate.audit.AuditEvent::getType)
+          .containsExactly("system_shutdown");
+      assertThat(repository.events.getFirst().getPrincipal()).isEqualTo(AuditEvent.SYSTEM_PRINCIPAL);
     });
   }
 
@@ -149,13 +232,12 @@ class AuditSupportAutoConfigurationTest {
   void testListenerIsWiredWithTheContextResolverBean() {
     this.runner
         .withBean(AuditEventContextResolver.class, TestContextResolver::new)
-        .withBean(EventTransformer.class, RecordingEventTransformer::new)
+        .withBean(RecordingEventTransformer.class, RecordingEventTransformer::new)
         .run(context -> {
           final TestEvent event = new TestEvent("src");
           context.publishEvent(event);
 
-          final RecordingEventTransformer transformer =
-              (RecordingEventTransformer) context.getBean(EventTransformer.class);
+          final RecordingEventTransformer transformer = context.getBean(RecordingEventTransformer.class);
           assertThat(transformer.principal).isEqualTo("test-principal");
 
           final TestContextResolver resolver = (TestContextResolver) context.getBean(AuditEventContextResolver.class);
@@ -261,6 +343,25 @@ class AuditSupportAutoConfigurationTest {
 
     TestEvent(final Object source) {
       super(source);
+    }
+  }
+
+  /**
+   * An {@link AuditEventRepository} recording the events it receives.
+   */
+  private static class RecordingRepository implements AuditEventRepository {
+
+    private final List<org.springframework.boot.actuate.audit.AuditEvent> events = new ArrayList<>();
+
+    @Override
+    public void add(final org.springframework.boot.actuate.audit.@NonNull AuditEvent event) {
+      this.events.add(event);
+    }
+
+    @Override
+    public @NonNull List<org.springframework.boot.actuate.audit.AuditEvent> find(
+        final @Nullable String principal, final @Nullable Instant after, final @Nullable String type) {
+      return List.copyOf(this.events);
     }
   }
 
