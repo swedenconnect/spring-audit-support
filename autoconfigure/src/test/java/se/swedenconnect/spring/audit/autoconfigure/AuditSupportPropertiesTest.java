@@ -44,6 +44,19 @@ class AuditSupportPropertiesTest {
   }
 
   @Test
+  void testLifecycleEventsAreLoggedByDefault() {
+    assertThat(new AuditSupportProperties().isLogLifecycleEvents()).isTrue();
+  }
+
+  @Test
+  void testLogLifecycleEvents() {
+    final AuditSupportProperties properties = new AuditSupportProperties();
+    properties.setLogLifecycleEvents(false);
+
+    assertThat(properties.isLogLifecycleEvents()).isFalse();
+  }
+
+  @Test
   void testPrefix() {
     assertThat(AuditSupportProperties.PREFIX).isEqualTo("audit");
   }
