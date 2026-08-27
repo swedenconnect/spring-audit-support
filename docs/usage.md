@@ -286,10 +286,10 @@ fields. Like `SystemAlertEvent`, it transforms itself, so nothing needs to be re
 The library also supplies two transformers for auditing the application lifecycle,
 `ApplicationReadyEventTransformer` and `ContextClosedEventTransformer`, which produce audit events of type
 `system_started` and `system_shutdown`. These are registered by the auto-configuration, so no application code is
-needed. Declare your own bean of either type to replace the supplied one.
+needed. Declare your own bean of either type to replace the supplied one, or assign `audit.log-lifecycle-events` to
+`false` to leave the application lifecycle unaudited.
 
-All of the library's own audit events, and their data, are documented under
-[Documenting Audit Events](documentation-guide.html#library-events).
+All of the library's own audit events, and their data, are documented under [Audit Events](audit-events.html).
 
 -----
 

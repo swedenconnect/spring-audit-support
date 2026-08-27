@@ -13,7 +13,9 @@ IDs from this library alone. Applications that do run Micrometer must not end up
 ## Background: the two identifiers
 
 The library distinguishes two concepts, and the distinction drives the entire design. See
-[`docs/tracing.md`](../../docs/tracing.md) for the user-facing description.
+[Correlation ID and Trace ID](https://docs.swedenconnect.se/spring-audit-support/tracing.html) for the user-facing
+description, and [Usage](https://docs.swedenconnect.se/spring-audit-support/usage.html) for how audit events are put
+together.
 
 **Correlation ID.** An identifier that may span **many requests**, assigned by the **application** from its own logic.
 A SAML authentication flow involves an authentication request, a user interacting with a login page over several
@@ -32,11 +34,18 @@ ID is read only.
 The `se.swedenconnect.spring.audit.tracing` package provides the foundation this work builds on:
 
 - `CorrelationID` and `TraceID`, immutable value types, declared on `AuditEvent`
-- `CorrelationIDHolder` and `TraceIDHolder`, static entry points to the current identifier
-- A pluggable storage strategy behind the holders, with an MDC based implementation as the default
+- `CorrelationIDHolder` and `TraceIDHolder`, the static, application facing entry points to the current identifier.
+  `CorrelationIDHolder` reads, writes and clears; `TraceIDHolder` only reads.
+- `TraceIDWriter`, the write path for the component that assigns a trace ID, deliberately kept off the application
+  facing surface.
+- `IdentifierStorage`, the pluggable storage contract, with `MdcIdentifierStorage` as the default implementation and
+  `IdentifierStorageHolder` deciding which one is installed.
 
 Storage is pluggable specifically so that a reactive implementation can be installed without `audit-support` gaining
 any knowledge of Reactor. This issue is where that reactive implementation gets built.
+
+See [Correlation ID and Trace ID](https://docs.swedenconnect.se/spring-audit-support/tracing.html) for the full
+description of what exists today, including the "Coming features" section that this issue is meant to deliver.
 
 ## Scope
 
@@ -142,7 +151,9 @@ A rejected value must never fail the request. Drop the value, log at an appropri
 
 ## Proposed configuration
 
-All settings nested under the existing `audit` prefix.
+All settings nested under the existing `audit` prefix. See
+[Configuration](https://docs.swedenconnect.se/spring-audit-support/configuration.html) for the conventions the existing
+properties follow.
 
 ```yaml
 audit:
@@ -158,7 +169,7 @@ audit:
     trace-id:
       source: auto            # auto | library | micrometer | none
       header-name: X-Trace-Id # only meaningful when source resolves to "library"
-      mdc-key: traceId        # only meaningful when source resolves to "micrometer"
+      micrometer-mdc-key: traceId  # only meaningful when source resolves to "micrometer"
       inbound:
         enabled: false
         echo-in-response: false
@@ -189,10 +200,15 @@ startup warning rather than being silently ignored.
 for new headers. `Correlation-ID` and `Trace-Id` are the more modern choice. Worth a decision rather than defaulting to
 habit.
 
-**The MDC key for the correlation ID is deliberately not configurable.** It is fixed at `correlationID`, chosen to
-avoid colliding with Micrometer Tracing's own `traceId` key. Making it configurable would force the holder's static API
-to become instance based, which ripples through everything. The trace ID key is configurable because in the Micrometer
-case it must match whatever the application's tracing setup uses.
+**The storage keys are deliberately not configurable.** The correlation ID is stored under `correlationID` and the
+library's own trace ID under `auditTraceID`, both fixed constants on the respective holder. The trace ID key avoids
+`traceId`, which is what Micrometer Tracing uses, so that the two can coexist in one application without overwriting
+each other, and it avoids `traceID` too, since a key differing from Micrometer's by the case of one letter is a trap
+for whoever writes the log pattern. Making these configurable would force the holders' static API to become instance
+based, which ripples through everything.
+
+The configurable `micrometer-mdc-key` above is a different thing: it is the key the library *reads* when Micrometer is
+the trace ID source, and it has to match whatever the application's tracing setup writes.
 
 ## Pitfalls
 
@@ -271,7 +287,7 @@ Things that need an answer before or during implementation. Several were discuss
 - Constructing or parsing `traceparent` ourselves
 - Per destination outbound allow-lists
 - Path exclusions for the inbound filters
-- Any change to the correlation ID MDC key
+- Any change to the fixed storage keys, `correlationID` and `auditTraceID`
 
 ## Acceptance criteria
 
@@ -287,4 +303,8 @@ Things that need an answer before or during implementation. Several were discuss
 - Inbound values containing CR, LF or control characters never reach a log line or a stored audit record, and a
   rejected value never fails the request.
 - Identifiers are cleared on every request exit path, including error paths, verified by a test that reuses a thread.
-- Everything above is reflected in `docs/tracing.md`, with the "Coming features" section reduced accordingly.
+- The documentation is updated. `docs/tracing.md` loses the parts of its
+  [Coming features](https://docs.swedenconnect.se/spring-audit-support/tracing.html#coming-features) section that this
+  work delivers, and the new properties are added to the table in `docs/configuration.md`. If any new audit event type
+  is introduced, it is documented in `docs/audit-events.md` following
+  [Documenting Audit Events](https://docs.swedenconnect.se/spring-audit-support/documentation-guide.html).

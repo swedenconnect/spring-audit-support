@@ -64,8 +64,8 @@ From `AuditSupportAutoConfiguration`:
   context.
 - An `AuditApplicationListener` bean wired with the resolver and every `EventTransformer` bean found in the context.
 - `ApplicationReadyEventTransformer` and `ContextClosedEventTransformer` beans, so that application startup and
-  shutdown are audited without any application code. See
-  [Documenting Audit Events](documentation-guide.html#library-events) for what they produce.
+  shutdown are audited without any application code. See [Audit Events](audit-events.html) for what they produce. Assign
+  `audit.log-lifecycle-events` to `false` to leave the lifecycle unaudited.
 
 From `AuditRepositoryAutoConfiguration`:
 
@@ -124,6 +124,7 @@ Setting `enabled: false` still turns the backend off.
 | Property | Description | Type | Default value |
 | :--- | :--- | :--- | :--- |
 | `audit.default-principal` | The principal offered to the event transformers when no user is authenticated. A commonly used value is `system`. | String | - (no principal) |
+| `audit.log-lifecycle-events` | Whether the application lifecycle should be audited, i.e., whether a `system_started` event is created when the application has started, and a `system_shutdown` event when it is shutting down. | Boolean | `true` |
 
 <a name="repository-properties"></a>
 ### Repositories
