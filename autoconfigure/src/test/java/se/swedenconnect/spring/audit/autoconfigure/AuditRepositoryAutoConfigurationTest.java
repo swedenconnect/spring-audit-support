@@ -29,7 +29,13 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseBuilder;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseType;
+import org.springframework.context.ApplicationContext;
+import org.springframework.test.util.ReflectionTestUtils;
 import se.swedenconnect.spring.audit.repository.AuditEventMapper;
+import se.swedenconnect.spring.audit.repository.DatabaseAuditEventRepository;
+import se.swedenconnect.spring.audit.repository.DelegatingAuditEventRepository;
+import se.swedenconnect.spring.audit.repository.FileBasedAuditEventRepository;
+import se.swedenconnect.spring.audit.repository.InMemoryAuditEventRepository;
 import se.swedenconnect.spring.audit.repository.DefaultJdbcAuditEventDao;
 import se.swedenconnect.spring.audit.repository.DefaultMongoAuditEventDao;
 import se.swedenconnect.spring.audit.repository.JdbcAuditEventDao;
@@ -55,6 +61,13 @@ class AuditRepositoryAutoConfigurationTest {
 
   private final ApplicationContextRunner runner = new ApplicationContextRunner()
       .withConfiguration(AutoConfigurations.of(AuditRepositoryAutoConfiguration.class));
+
+  @SuppressWarnings("unchecked")
+  private static List<AuditEventRepository> delegates(final ApplicationContext context) {
+    final AuditEventRepository repository = context.getBean(AuditEventRepository.class);
+    assertThat(repository).isInstanceOf(DelegatingAuditEventRepository.class);
+    return (List<AuditEventRepository>) ReflectionTestUtils.getField(repository, "repositories");
+  }
 
   @Test
   void testDefaultCreatesQueryableRepository() {
@@ -145,6 +158,17 @@ class AuditRepositoryAutoConfigurationTest {
             "audit.repository.syslog.host=127.0.0.1",
             "audit.repository.syslog.transport=TCP")
         .run(context -> assertThat(context).hasSingleBean(AuditEventRepository.class));
+  }
+
+  @Test
+  void testExcludeEventsFilterWithoutIncludeEvents() {
+    this.runner.withPropertyValues("audit.repository.exclude-events=noisy_event").run(context -> {
+      final AuditEventRepository repository = context.getBean(AuditEventRepository.class);
+      repository.add(new AuditEvent("alice", "noisy_event", Map.of()));
+      repository.add(new AuditEvent("alice", "login", Map.of()));
+
+      assertThat(repository.find(null, null, null)).extracting(AuditEvent::getType).containsExactly("login");
+    });
   }
 
   @Test
@@ -282,6 +306,42 @@ class AuditRepositoryAutoConfigurationTest {
       context.getBean(AuditEventRepository.class).add(new AuditEvent("alice", "login", Map.of()));
       assertThat(logFile).doesNotExist();
     });
+  }
+
+  @Test
+  void testInMemoryIsConsultedAfterDurableRepositories(@TempDir final Path directory) {
+    this.runner
+        .withUserConfiguration(DataSourceConfiguration.class)
+        .withPropertyValues(
+            "audit.repository.jdbc.table-name=audit_events",
+            "audit.repository.in-memory.capacity=1")
+        .run(context -> {
+          assertThat(delegates(context)).map(Object::getClass).containsExactly(
+              DatabaseAuditEventRepository.class, InMemoryAuditEventRepository.class);
+
+          // The in-memory repository only holds the last event, whereas the JDBC repository holds both. Since the
+          // durable repository is consulted first, both events are found.
+          final AuditEventRepository repository = context.getBean(AuditEventRepository.class);
+          repository.add(new AuditEvent("alice", "login", Map.of()));
+          repository.add(new AuditEvent("alice", "logout", Map.of()));
+
+          assertThat(repository.find(null, null, null))
+              .extracting(AuditEvent::getType).containsExactlyInAnyOrder("login", "logout");
+        });
+  }
+
+  @Test
+  void testFallbackInMemoryIsAppendedForWriteOnlyRepositories(@TempDir final Path directory) {
+    this.runner
+        .withPropertyValues("audit.repository.file.log-file=" + directory.resolve("audit.log"))
+        .run(context -> assertThat(delegates(context)).map(Object::getClass).containsExactly(
+            FileBasedAuditEventRepository.class, InMemoryAuditEventRepository.class));
+  }
+
+  @Test
+  void testOnlyInMemoryConfiguredGivesNoDuplicate() {
+    this.runner.withPropertyValues("audit.repository.in-memory.capacity=10").run(context ->
+        assertThat(delegates(context)).map(Object::getClass).containsExactly(InMemoryAuditEventRepository.class));
   }
 
   @Test

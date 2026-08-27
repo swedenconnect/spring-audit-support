@@ -6,9 +6,24 @@ repositories at once — for example, to persist to a database **and** ship to s
 (and therefore Spring Boot's `AuditEventRepository`).
 
 - **`add(event)`** applies this repository's own filter and then forwards accepted events to **all** delegates.
-- **`find(principal, after, type)`** (and the predicate-based `find`) try each delegate in order and return the
-  **first non-empty** result.
-- **`supportsFind()`** is `true` if at least one delegate can serve queries.
+- **`find(principal, after, type)`** and the predicate-based **`find(criteria)`** both try each delegate in order and
+  return the **first non-empty** result — results are never merged. They differ in which delegates they can use:
+  `find(principal, after, type)` uses **all** delegates, since every `AuditEventRepository` offers that method, while
+  `find(criteria)` only uses delegates that are `ExtendedAuditEventRepository` instances supporting find.
+- **`supportsFind()`** is `true` if at least one delegate is an `ExtendedAuditEventRepository` whose `supportsFind()`
+  is `true` — that is, it reports whether a **predicate-based** query can be served. When it is `false`,
+  `find(criteria)` returns an empty list. A plain `AuditEventRepository` delegate does not make it `true`, even though
+  such a delegate can still answer `find(principal, after, type)`.
+
+## Delegate order matters
+
+Since a query is answered by the first delegate that returns a result — results are never merged across delegates —
+list the delegates in the order you want them consulted: **the most complete store first, the most limited one last**.
+
+In particular, an in-memory repository should always come last. It is a bounded buffer holding only the most recent
+events, so a query hitting it first would be answered from that buffer and a durable delegate behind it would never be
+consulted. The [auto-configuration](autoconfigure.md) follows this rule and appends the in-memory repository after all
+other repositories.
 
 ## Filtering
 

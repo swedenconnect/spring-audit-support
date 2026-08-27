@@ -66,4 +66,31 @@ class AuditEventFilterPredicateTest {
         .rejects(event("logout"), event("other"));
   }
 
+  @Test
+  void testInclusionExclusionPredicateWithEmptyIncludeAcceptsEverythingNotExcluded() {
+    assertThat(AbstractAuditEventRepository.inclusionExclusionPredicate(List.of(), List.of("logout")))
+        .accepts(event("login"), event("other"))
+        .rejects(event("logout"));
+  }
+
+  @Test
+  void testInclusionExclusionPredicateWithBothListsEmptyAcceptsEverything() {
+    assertThat(AbstractAuditEventRepository.inclusionExclusionPredicate(List.of(), List.of()))
+        .accepts(event("login"), event("logout"), event("other"));
+  }
+
+  @Test
+  void testInclusionExclusionPredicateWithEmptyExcludeAcceptsOnlyIncluded() {
+    assertThat(AbstractAuditEventRepository.inclusionExclusionPredicate(List.of("login"), List.of()))
+        .accepts(event("login"))
+        .rejects(event("logout"));
+  }
+
+  @Test
+  void testInclusionExclusionPredicateLetsExclusionWin() {
+    // A type listed in both lists is excluded - exclusion takes precedence over inclusion.
+    assertThat(AbstractAuditEventRepository.inclusionExclusionPredicate(List.of("login"), List.of("login")))
+        .rejects(event("login"));
+  }
+
 }

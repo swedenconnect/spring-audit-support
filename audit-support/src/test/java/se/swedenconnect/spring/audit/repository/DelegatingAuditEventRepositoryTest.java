@@ -171,9 +171,55 @@ class DelegatingAuditEventRepositoryTest {
   }
 
   @Test
-  void testSupportsFind() {
-    assertThat(new DelegatingAuditEventRepository(List.of(new RecordingRepository())).supportsFind()).isTrue();
-    assertThat(new DelegatingAuditEventRepository(List.of(new FailingRepository())).supportsFind()).isFalse();
+  void testSupportsFindRequiresAQueryableExtendedDelegate() {
+    assertThat(new DelegatingAuditEventRepository(List.of(new InMemoryAuditEventRepository())).supportsFind())
+        .isTrue();
+    assertThat(new DelegatingAuditEventRepository(List.of(new WriteOnlyRepository())).supportsFind()).isFalse();
+  }
+
+  @Test
+  void testOnlyPlainDelegatesDoNotSupportFind() {
+    final RecordingRepository plain = new RecordingRepository();
+    plain.findResult = List.of(event("login"));
+    final DelegatingAuditEventRepository repo = new DelegatingAuditEventRepository(List.of(plain));
+
+    // A plain AuditEventRepository can not serve a predicate-based query ...
+    assertThat(repo.supportsFind()).isFalse();
+    assertThat(repo.find(e -> true)).isEmpty();
+
+    // ... but it is still used by the Spring Boot find method.
+    assertThat(repo.find(null, null, null)).extracting(AuditEvent::getType).containsExactly("login");
+  }
+
+  @Test
+  void testWriteOnlyExtendedDelegateAndPlainDelegateDoNotSupportFind() {
+    final DelegatingAuditEventRepository repo =
+        new DelegatingAuditEventRepository(List.of(new WriteOnlyRepository(), new RecordingRepository()));
+
+    assertThat(repo.supportsFind()).isFalse();
+    assertThat(repo.find(e -> true)).isEmpty();
+  }
+
+  @Test
+  void testQueryableExtendedDelegateSupportsFind() {
+    final DelegatingAuditEventRepository repo =
+        new DelegatingAuditEventRepository(List.of(new InMemoryAuditEventRepository()));
+    repo.add(event("login"));
+
+    assertThat(repo.supportsFind()).isTrue();
+    assertThat(repo.find(e -> true)).extracting(AuditEvent::getType).containsExactly("login");
+  }
+
+  @Test
+  void testQueryableDelegateAnswersWhenMixedWithAWriteOnlyOne() {
+    final WriteOnlyRepository writeOnly = new WriteOnlyRepository();
+    final DelegatingAuditEventRepository repo =
+        new DelegatingAuditEventRepository(List.of(writeOnly, new InMemoryAuditEventRepository()));
+    repo.add(event("login"));
+
+    assertThat(repo.supportsFind()).isTrue();
+    assertThat(writeOnly.events).extracting(AuditEvent::getType).containsExactly("login");
+    assertThat(repo.find(e -> true)).extracting(AuditEvent::getType).containsExactly("login");
   }
 
   private static AuditEvent event(final String type) {
@@ -247,6 +293,30 @@ class DelegatingAuditEventRepositoryTest {
     @Override
     protected java.util.@NonNull Iterator<AuditEvent> getEvents() {
       throw new UnsupportedOperationException();
+    }
+  }
+
+  /**
+   * An {@link AbstractAuditEventRepository} that accepts writes but can not serve queries - like the file and syslog
+   * repositories.
+   */
+  private static class WriteOnlyRepository extends AbstractAuditEventRepository {
+
+    private final List<AuditEvent> events = new ArrayList<>();
+
+    @Override
+    protected void addEvent(final @NonNull AuditEvent event) {
+      this.events.add(event);
+    }
+
+    @Override
+    public boolean supportsFind() {
+      return false;
+    }
+
+    @Override
+    protected java.util.@NonNull Iterator<AuditEvent> getEvents() {
+      throw new UnsupportedOperationException("This repository does not support find");
     }
   }
 

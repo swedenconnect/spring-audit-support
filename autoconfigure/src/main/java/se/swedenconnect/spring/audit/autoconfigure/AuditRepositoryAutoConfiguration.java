@@ -22,12 +22,12 @@ import com.cloudbees.syslog.sender.AbstractSyslogMessageSender;
 import com.cloudbees.syslog.sender.SyslogMessageSender;
 import com.cloudbees.syslog.sender.TcpSyslogMessageSender;
 import com.cloudbees.syslog.sender.UdpSyslogMessageSender;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.BeanCreationException;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.actuate.audit.AuditEvent;
 import org.springframework.boot.actuate.audit.AuditEventRepository;
 import org.springframework.boot.actuate.autoconfigure.audit.AuditAutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -71,7 +71,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.function.Predicate;
 
 /**
  * Auto-configuration that sets up an {@link AuditEventRepository} bean based on the {@code audit.repository.*}
@@ -110,6 +109,17 @@ public class AuditRepositoryAutoConfiguration {
 
   /**
    * Assembles the {@link AuditEventRepository} bean from the configured repositories.
+   * <p>
+   * The order of the repositories matters, since {@link DelegatingAuditEventRepository} answers a query from the first
+   * delegate that returns a result. Therefore, the in-memory repository is always placed last: it is a bounded buffer
+   * holding only the most recent events, so if it were consulted first, a configured durable store (JDBC, MongoDB or
+   * Redis) would never be queried, and only the tail of the audit log would be visible.
+   * </p>
+   * <p>
+   * If no configured repository can serve queries, an in-memory repository is appended so that audit events can still
+   * be read. A configured in-memory repository already satisfies that requirement, so at most one in-memory repository
+   * is created.
+   * </p>
    *
    * @param properties the audit repository properties
    * @param auditEventMapper the event mapper
@@ -133,11 +143,6 @@ public class AuditRepositoryAutoConfiguration {
     // The settings of the configured repositories have been validated and defaulted - see
     // AuditRepositoryProperties#afterPropertiesSet().
     //
-    if (isEnabled(properties.getInMemory())) {
-      repositories.add(properties.getInMemory().getCapacity() != null
-          ? new InMemoryAuditEventRepository(properties.getInMemory().getCapacity())
-          : new InMemoryAuditEventRepository());
-    }
     if (isEnabled(properties.getFile())) {
       repositories.add(new FileBasedAuditEventRepository(properties.getFile().getLogFile(), auditEventMapper));
     }
@@ -150,16 +155,27 @@ public class AuditRepositoryAutoConfiguration {
     addOptional(repositories, isEnabled(properties.getSyslog()), syslogSupplier, "syslog",
         "syslog-java-client on the classpath");
 
-    // Make sure at least one repository can serve queries, so audit events can be read.
+    // The in-memory repository is added last, so that a durable store is always consulted before the bounded
+    // in-memory buffer - see the ordering note in the method documentation.
+    //
+    if (isEnabled(properties.getInMemory())) {
+      repositories.add(properties.getInMemory().getCapacity() != null
+          ? new InMemoryAuditEventRepository(properties.getInMemory().getCapacity())
+          : new InMemoryAuditEventRepository());
+    }
+
+    // Make sure at least one repository can serve queries, so audit events can be read. A configured in-memory
+    // repository already satisfies this, so at most one in-memory repository is ever created.
     final boolean queryable = repositories.stream()
         .anyMatch(r -> r instanceof final ExtendedAuditEventRepository e && e.supportsFind());
     if (!queryable) {
-      repositories.add(0, new InMemoryAuditEventRepository());
+      repositories.add(new InMemoryAuditEventRepository());
       log.info("No queryable audit repository configured - added an in-memory repository so events can be read");
     }
 
-    final DelegatingAuditEventRepository repository =
-        new DelegatingAuditEventRepository(repositories, buildFilter(properties));
+    final DelegatingAuditEventRepository repository = new DelegatingAuditEventRepository(repositories,
+        AbstractAuditEventRepository.inclusionExclusionPredicate(
+            properties.getIncludeEvents(), properties.getExcludeEvents()));
     if (properties.getThrowOnWriteFail() != null) {
       repository.setThrowOnWriteFail(properties.getThrowOnWriteFail());
     }
@@ -176,26 +192,6 @@ public class AuditRepositoryAutoConfiguration {
    */
   private static boolean isEnabled(final AuditRepositoryProperties.@Nullable RepositorySettings settings) {
     return settings != null && settings.isEnabled();
-  }
-
-  /**
-   * Builds the include/exclude filter, or returns {@code null} (accept all) if neither list is configured. An empty
-   * {@code include-events} list must not be turned into an inclusion predicate, as that would reject all events.
-   *
-   * @param properties the audit repository properties
-   * @return a filter predicate, or {@code null} to accept all events
-   */
-  private static @Nullable Predicate<AuditEvent> buildFilter(final AuditRepositoryProperties properties) {
-    Predicate<AuditEvent> filter = null;
-    if (!properties.getIncludeEvents().isEmpty()) {
-      filter = AbstractAuditEventRepository.inclusionPredicate(properties.getIncludeEvents());
-    }
-    if (!properties.getExcludeEvents().isEmpty()) {
-      final Predicate<AuditEvent> exclusion =
-          AbstractAuditEventRepository.exclusionPredicate(properties.getExcludeEvents());
-      filter = filter != null ? filter.and(exclusion) : exclusion;
-    }
-    return filter;
   }
 
   /**
@@ -264,7 +260,7 @@ public class AuditRepositoryAutoConfiguration {
 
     /** {@inheritDoc} */
     @Override
-    public boolean matches(final ConditionContext context, final AnnotatedTypeMetadata metadata) {
+    public boolean matches(final @NonNull ConditionContext context, final @NonNull AnnotatedTypeMetadata metadata) {
       final Binder binder = Binder.get(context.getEnvironment());
       if (!binder.bind(this.prefix + ".enabled", Boolean.class).orElse(true)) {
         return false;

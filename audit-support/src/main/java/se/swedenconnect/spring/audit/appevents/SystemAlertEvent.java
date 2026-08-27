@@ -122,6 +122,7 @@ public class SystemAlertEvent extends ApplicationEvent implements SingleEventTra
     return AuditEventBuilder.builder(context)
         .type("system_alert")
         .timestamp(Instant.ofEpochMilli(event.getTimestamp()))
+        .principal(se.swedenconnect.spring.audit.AuditEvent.SYSTEM_PRINCIPAL)
         .dataField(MapAuditValue.builder()
             .name("alert_info")
             .value("message", this.getMessage())

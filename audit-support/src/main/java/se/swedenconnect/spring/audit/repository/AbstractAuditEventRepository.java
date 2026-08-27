@@ -194,9 +194,13 @@ public abstract class AbstractAuditEventRepository implements ExtendedAuditEvent
   protected abstract @NonNull Iterator<AuditEvent> getEvents() throws UnsupportedOperationException;
 
   /**
-   * Returns an audit event filter that accepts a list of event types that are accepted.
+   * Returns an audit event filter that accepts a list of event types that are accepted, i.e., a literal whitelist.
    * <p>
-   * If the {@code types} parameter is an empty list, no events are accepted.
+   * If the {@code types} parameter is an empty list, no events are accepted &ndash; an empty whitelist accepts nothing.
+   * This is deliberately different from {@link #inclusionExclusionPredicate(List, List)}, where an empty list of
+   * included types means "no inclusion constraint". Use this method when the caller assembles the list of accepted
+   * types itself, so that an empty list fails closed, and the other method when the lists come from configuration,
+   * where an unassigned setting means "no constraint".
    * </p>
    *
    * @param types the types that are accepted
@@ -221,7 +225,16 @@ public abstract class AbstractAuditEventRepository implements ExtendedAuditEvent
 
   /**
    * Returns an audit event filter that combines {@link #inclusionPredicate(List)} and
-   * {@link #exclusionPredicate(List)}.
+   * {@link #exclusionPredicate(List)}, intended for filters built from configuration where an unassigned setting means
+   * "no constraint".
+   * <p>
+   * An empty {@code includeTypes} list is therefore treated as "no inclusion constraint" &ndash; all events are
+   * accepted except those explicitly excluded. Note that this differs from {@link #inclusionPredicate(List)}, where an
+   * empty list is a literal, empty whitelist that accepts nothing.
+   * </p>
+   * <p>
+   * An event whose type appears in both lists is <b>excluded</b> &ndash; exclusion takes precedence over inclusion.
+   * </p>
    *
    * @param includeTypes the types to include (if empty, all events are accepted except those explicitly excluded)
    * @param dontIncludeTypes the types to exclude (if empty, no events are excluded)
@@ -229,7 +242,9 @@ public abstract class AbstractAuditEventRepository implements ExtendedAuditEvent
    */
   public static @NonNull Predicate<AuditEvent> inclusionExclusionPredicate(
       final @NonNull List<String> includeTypes, final @NonNull List<String> dontIncludeTypes) {
-    return inclusionPredicate(includeTypes).and(exclusionPredicate(dontIncludeTypes));
+    return includeTypes.isEmpty()
+        ? exclusionPredicate(dontIncludeTypes)
+        : inclusionPredicate(includeTypes).and(exclusionPredicate(dontIncludeTypes));
   }
 
 }

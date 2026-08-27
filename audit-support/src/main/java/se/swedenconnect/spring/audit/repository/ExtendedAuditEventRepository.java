@@ -51,6 +51,44 @@ import java.util.function.Predicate;
 public interface ExtendedAuditEventRepository extends AuditEventRepository {
 
   /**
+   * Tells whether this event repository supports the find methods, i.e., whether the repository has access to already
+   * processed events or not.
+   *
+   * @return {@code true} if find is supported, or {@code false} otherwise
+   */
+  boolean supportsFind();
+
+  /**
+   * Finds all audit events matching the supplied criteria.
+   *
+   * @param criteria the predicate that an event must satisfy to be included in the result
+   * @return a list of matching audit events, or an empty list if the repository does not
+   *     {@link #supportsFind() support find}
+   */
+  @NonNull List<AuditEvent> find(final @NonNull Predicate<AuditEvent> criteria);
+
+  /**
+   * Finds all audit events matching the supplied criteria by combining the non-{@code null} arguments into a predicate
+   * and delegating to {@link #find(Predicate)}. Arguments that are {@code null} are not used as criteria.
+   *
+   * @param principal the principal to match, or {@code null} to not filter on principal
+   * @param after the instant that an event's timestamp must be after, or {@code null} to not filter on timestamp
+   * @param type the audit type to match, or {@code null} to not filter on type
+   * @return a list of matching audit events, or an empty list if the repository does not
+   *     {@link #supportsFind() support find}
+   */
+  @Override
+  default @NonNull List<AuditEvent> find(
+      final @Nullable String principal, final @Nullable Instant after, final @Nullable String type) {
+    return this.supportsFind()
+        ? this.find(
+        Optional.ofNullable(principal).map(ExtendedAuditEventRepository::principal).orElseGet(() -> p -> true)
+            .and(Optional.ofNullable(after).map(ExtendedAuditEventRepository::isAfter).orElseGet(() -> i -> true))
+            .and(Optional.ofNullable(type).map(ExtendedAuditEventRepository::type).orElseGet(() -> t -> true)))
+        : Collections.emptyList();
+  }
+
+  /**
    * Creates a predicate that matches audit events with the given principal.
    *
    * @param principal the principal to match
@@ -148,41 +186,4 @@ public interface ExtendedAuditEventRepository extends AuditEventRepository {
     return correlationId(CorrelationID.of(correlationId));
   }
 
-  /**
-   * Tells whether this event repository supports the find methods, i.e., whether the repository has access to already
-   * processed events or not.
-   *
-   * @return {@code true} if find is supported, or {@code false} otherwise
-   */
-  boolean supportsFind();
-
-  /**
-   * Finds all audit events matching the supplied criteria.
-   *
-   * @param criteria the predicate that an event must satisfy to be included in the result
-   * @return a list of matching audit events, or an empty list if the repository does not
-   *     {@link #supportsFind() support find}
-   */
-  @NonNull List<AuditEvent> find(final @NonNull Predicate<AuditEvent> criteria);
-
-  /**
-   * Finds all audit events matching the supplied criteria by combining the non-{@code null} arguments into a predicate
-   * and delegating to {@link #find(Predicate)}. Arguments that are {@code null} are not used as criteria.
-   *
-   * @param principal the principal to match, or {@code null} to not filter on principal
-   * @param after the instant that an event's timestamp must be after, or {@code null} to not filter on timestamp
-   * @param type the audit type to match, or {@code null} to not filter on type
-   * @return a list of matching audit events, or an empty list if the repository does not
-   *     {@link #supportsFind() support find}
-   */
-  @Override
-  default @NonNull List<AuditEvent> find(
-      final @Nullable String principal, final @Nullable Instant after, final @Nullable String type) {
-    return this.supportsFind()
-        ? this.find(
-        Optional.ofNullable(principal).map(ExtendedAuditEventRepository::principal).orElseGet(() -> p -> true)
-            .and(Optional.ofNullable(after).map(ExtendedAuditEventRepository::isAfter).orElseGet(() -> i -> true))
-            .and(Optional.ofNullable(type).map(ExtendedAuditEventRepository::type).orElseGet(() -> t -> true)))
-        : Collections.emptyList();
-  }
 }

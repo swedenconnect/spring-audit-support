@@ -33,8 +33,27 @@ import java.util.function.Predicate;
  * instances.
  * <p>
  * {@link #add(AuditEvent)} first applies this repository's own {@link Predicate filter} and then forwards accepted
- * events to <b>all</b> delegates. {@link #find(String, Instant, String) find} tries each delegate in order and returns
- * the first non-empty result.
+ * events to <b>all</b> delegates.
+ * </p>
+ * <p>
+ * <b>Querying.</b> Both find methods try the delegates in order and return the first non-empty result - results are
+ * never merged across delegates. The two methods differ in which delegates they can use:
+ * </p>
+ * <ul>
+ *   <li>{@link #find(String, Instant, String)} uses <b>all</b> delegates, since every {@link AuditEventRepository}
+ *   offers that method.</li>
+ *   <li>{@link #find(Predicate)} uses only those delegates that are {@link ExtendedAuditEventRepository} instances
+ *   supporting find. If there is no such delegate, i.e., if {@link #supportsFind()} returns {@code false}, an empty
+ *   list is returned.</li>
+ * </ul>
+ * <p>
+ * Consequently, {@link #supportsFind()} reports whether a predicate-based query can be served. It does not promise
+ * anything about {@link #find(String, Instant, String)}, which any delegate can answer.
+ * </p>
+ * <p>
+ * Since a query is answered by the first delegate that produces a result, the delegates should be ordered with the
+ * most complete store first. In particular, an in-memory repository - a bounded buffer holding only the most recent
+ * events - should be placed last.
  * </p>
  * <p>
  * <b>Filtering.</b> When a delegating repository is used, the event filter should normally be configured <em>here</em>
@@ -170,10 +189,18 @@ public class DelegatingAuditEventRepository implements ExtendedAuditEventReposit
   }
 
   /**
-   * Tries each delegate that is an {@link ExtendedAuditEventRepository} in order, returning the first non-empty result.
+   * Tries each delegate that is an {@link ExtendedAuditEventRepository} supporting find, in order, and returns the
+   * first non-empty result. Delegates that are plain {@link AuditEventRepository} instances can not serve a
+   * predicate-based query and are therefore not consulted.
+   *
+   * @param criteria the predicate that an event must satisfy to be included in the result
+   * @return a list of matching audit events, or an empty list if no delegate {@link #supportsFind() supports find}
    */
   @Override
   public @NonNull List<AuditEvent> find(final @NonNull Predicate<AuditEvent> criteria) {
+    if (!this.supportsFind()) {
+      return List.of();
+    }
     for (final AuditEventRepository repository : this.repositories) {
       if (repository instanceof final ExtendedAuditEventRepository extended) {
         final List<AuditEvent> events = extended.find(criteria);
@@ -187,13 +214,18 @@ public class DelegatingAuditEventRepository implements ExtendedAuditEventReposit
 
   /**
    * {@inheritDoc}
+   * <p>
+   * Reports whether {@link #find(Predicate)} can be served, i.e., whether at least one delegate is an
+   * {@link ExtendedAuditEventRepository} that itself supports find. A delegate that is a plain
+   * {@link AuditEventRepository} does not count - it can not answer a predicate-based query.
+   * </p>
    *
-   * @return {@code true} if at least one delegate can serve queries
+   * @return {@code true} if at least one delegate can serve a predicate-based query
    */
   @Override
   public boolean supportsFind() {
     return this.repositories.stream()
-        .anyMatch(r -> !(r instanceof final ExtendedAuditEventRepository extended) || extended.supportsFind());
+        .anyMatch(r -> r instanceof final ExtendedAuditEventRepository extended && extended.supportsFind());
   }
 
 }

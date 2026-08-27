@@ -71,11 +71,6 @@
     </dependency>
 
     <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-web</artifactId>
-    </dependency>
-
-    <dependency>
       <groupId>se.swedenconnect.spring.audit</groupId>
       <artifactId>audit-support-spring-boot-autoconfigure</artifactId>
       <version>${project.version}</version>

@@ -71,6 +71,11 @@
     </dependency>
 
     <dependency>
+      <groupId>org.jspecify</groupId>
+      <artifactId>jspecify</artifactId>
+    </dependency>
+
+    <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-actuator-autoconfigure</artifactId>
       <optional>true</optional>
@@ -86,11 +91,6 @@
       <groupId>se.swedenconnect.spring.audit</groupId>
       <artifactId>audit-support</artifactId>
       <version>${project.version}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-webmvc</artifactId>
     </dependency>
 
     <!-- Optional Redis support -->

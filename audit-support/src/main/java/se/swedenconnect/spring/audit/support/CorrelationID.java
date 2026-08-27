@@ -109,6 +109,18 @@ public class CorrelationID implements Serializable {
   }
 
   /**
+   * Clears the correlation ID from MDC.
+   */
+  public static void mdcClear() {
+    try {
+      MDC.remove(MDC_KEY);
+    }
+    catch (final Exception e) {
+      log.warn("Failed to clear MDC for CorrelationID", e);
+    }
+  }
+
+  /**
    * Gets the value of the ID.
    *
    * @return the value
