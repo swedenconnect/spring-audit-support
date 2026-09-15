@@ -8,7 +8,7 @@
 
 **Date:** _Not yet released_
 
-- Initial version.
+- 
 
 ### Version 1.0.0
 
