@@ -21,6 +21,7 @@ import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import se.swedenconnect.spring.audit.support.ApplicationName;
+import se.swedenconnect.spring.audit.support.ApplicationVersion;
 import se.swedenconnect.spring.audit.tracing.CorrelationID;
 import se.swedenconnect.spring.audit.tracing.CorrelationIDHolder;
 import se.swedenconnect.spring.audit.tracing.TraceID;
@@ -33,6 +34,8 @@ import se.swedenconnect.spring.audit.tracing.TraceIDHolder;
  * </p>
  * <ul>
  *   <li>{@link AuditEventContext#getApplicationName()} - Returns the configured application name.</li>
+ *   <li>{@link AuditEventContext#getApplicationVersion()} - Returns the configured application version, which may be
+ *   {@code null}, since the version is optional.</li>
  *   <li>{@link AuditEventContext#getCorrelationId()} - Returns the {@link CorrelationID} of the current flow, see
  *   {@link CorrelationIDHolder}, which can be {@code null}.</li>
  *   <li>{@link AuditEventContext#getTraceId()} - Returns the {@link TraceID} of the current request, see
@@ -57,6 +60,9 @@ public class DefaultAuditEventContextResolver implements AuditEventContextResolv
   /** The application name. */
   private final @Nullable ApplicationName applicationName;
 
+  /** The application version. */
+  private final @Nullable ApplicationVersion applicationVersion;
+
   /**
    * The default principal to use if no principal can be found from the SecurityContextHolder when resolving the
    * principal.
@@ -67,15 +73,18 @@ public class DefaultAuditEventContextResolver implements AuditEventContextResolv
    * Constructor.
    *
    * @param applicationName the application name (or {@code null})
+   * @param applicationVersion the application version (or {@code null})
    */
-  public DefaultAuditEventContextResolver(final @Nullable ApplicationName applicationName) {
+  public DefaultAuditEventContextResolver(final @Nullable ApplicationName applicationName,
+      final @Nullable ApplicationVersion applicationVersion) {
     this.applicationName = applicationName;
+    this.applicationVersion = applicationVersion;
   }
 
   /**
-   * Returns an {@link AuditEventContext} holding the configured application name, the {@link CorrelationID} and
-   * {@link TraceID} of the current flow, and the name of the currently authenticated user (or the configured
-   * {@link #setDefaultPrincipal(String) default principal} if there is no authenticated user).
+   * Returns an {@link AuditEventContext} holding the configured application name and version, the
+   * {@link CorrelationID} and {@link TraceID} of the current flow, and the name of the currently authenticated user
+   * (or the configured {@link #setDefaultPrincipal(String) default principal} if there is no authenticated user).
    * <p>
    * The {@code input} parameter is not used by this implementation.
    * </p>
@@ -90,6 +99,11 @@ public class DefaultAuditEventContextResolver implements AuditEventContextResolv
       @Override
       public @Nullable ApplicationName getApplicationName() {
         return DefaultAuditEventContextResolver.this.applicationName;
+      }
+
+      @Override
+      public @Nullable ApplicationVersion getApplicationVersion() {
+        return DefaultAuditEventContextResolver.this.applicationVersion;
       }
 
       @Override

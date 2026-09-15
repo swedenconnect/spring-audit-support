@@ -25,9 +25,9 @@ audit events keeps working.
 
 What it adds:
 
-- **A structured audit event.** `AuditEvent` extends Spring's class with an application name, a correlation ID and a
-  trace ID at the root level, so entries from several applications can be told apart and entries belonging to the same
-  flow or the same request can be grouped.
+- **A structured audit event.** `AuditEvent` extends Spring's class with an `application` field, holding the name and
+  version of the producing application, and a correlation ID and a trace ID at the root level, so entries from several
+  applications and builds can be told apart and entries belonging to the same flow or the same request can be grouped.
 
 - **Audit values.** Event data is built from `AuditValue` objects, each a named value of a known type, rather than
   from an unconstrained map. An event type is then defined once, in one place, and every entry of that type has the

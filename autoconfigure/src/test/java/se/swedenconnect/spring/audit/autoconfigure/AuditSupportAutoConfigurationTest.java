@@ -35,7 +35,9 @@ import se.swedenconnect.spring.audit.AuditEventBuilder;
 import se.swedenconnect.spring.audit.AuditEventContext;
 import se.swedenconnect.spring.audit.AuditEventContextResolver;
 import se.swedenconnect.spring.audit.DefaultAuditEventContextResolver;
+import se.swedenconnect.spring.audit.support.Application;
 import se.swedenconnect.spring.audit.support.ApplicationName;
+import se.swedenconnect.spring.audit.support.ApplicationVersion;
 import se.swedenconnect.spring.audit.tracing.CorrelationID;
 import se.swedenconnect.spring.audit.tracing.TraceID;
 import se.swedenconnect.spring.audit.transform.ApplicationReadyEventTransformer;
@@ -258,14 +260,111 @@ class AuditSupportAutoConfigurationTest {
 
   @Test
   void testApplicationNameFromBuildProperties() {
-    final Properties properties = new Properties();
-    properties.setProperty("artifact", "build-app");
-
     new ApplicationContextRunner()
         .withConfiguration(AutoConfigurations.of(AuditSupportAutoConfiguration.class))
-        .withBean(BuildProperties.class, () -> new BuildProperties(properties))
+        .withBean(BuildProperties.class, () -> buildProperties("build-app", null))
         .run(context -> assertThat(context.getBean(ApplicationName.class))
             .isEqualTo(new ApplicationName("build-app")));
+  }
+
+  /**
+   * Creates a {@link BuildProperties} holding the supplied artifact and version.
+   *
+   * @param artifact the artifact
+   * @param version the version (or {@code null} for build information without a version)
+   * @return a {@link BuildProperties}
+   */
+  private static BuildProperties buildProperties(final String artifact, final @Nullable String version) {
+    final Properties properties = new Properties();
+    properties.setProperty("artifact", artifact);
+    if (version != null) {
+      properties.setProperty("version", version);
+    }
+    return new BuildProperties(properties);
+  }
+
+  @Test
+  void testApplicationVersionFromProperty() {
+    this.runner.withPropertyValues("audit.app-version=1.2.3").run(context -> {
+      assertThat(context).hasSingleBean(ApplicationVersion.class);
+      assertThat(context.getBean(ApplicationVersion.class)).isEqualTo(new ApplicationVersion("1.2.3"));
+      assertThat(context.getBean(AuditEventContextResolver.class).getContext(null).getApplicationVersion())
+          .isEqualTo(new ApplicationVersion("1.2.3"));
+    });
+  }
+
+  @Test
+  void testApplicationVersionFromBuildProperties() {
+    this.runner
+        .withBean(BuildProperties.class, () -> buildProperties("build-app", "4.5.6"))
+        .run(context -> {
+          assertThat(context.getBean(ApplicationVersion.class)).isEqualTo(new ApplicationVersion("4.5.6"));
+          assertThat(context.getBean(AuditEventContextResolver.class).getContext(null).getApplicationVersion())
+              .isEqualTo(new ApplicationVersion("4.5.6"));
+        });
+  }
+
+  @Test
+  void testApplicationVersionPropertyTakesPrecedenceOverBuildProperties() {
+    this.runner
+        .withPropertyValues("audit.app-version=1.2.3")
+        .withBean(BuildProperties.class, () -> buildProperties("build-app", "4.5.6"))
+        .run(context -> assertThat(context.getBean(ApplicationVersion.class))
+            .isEqualTo(new ApplicationVersion("1.2.3")));
+  }
+
+  @Test
+  void testNoApplicationVersionAvailable() {
+    this.runner.run(context -> {
+      // The version is optional - the context starts, but there is no bean and the audit events carry no version.
+      assertThat(context).hasNotFailed();
+      assertThat(context).doesNotHaveBean(ApplicationVersion.class);
+      assertThat(context.getBean(AuditEventContextResolver.class).getContext(null).getApplicationVersion()).isNull();
+    });
+  }
+
+  @Test
+  void testBuildPropertiesWithoutVersionGivesNoApplicationVersion() {
+    this.runner
+        .withBean(BuildProperties.class, () -> buildProperties("build-app", null))
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          assertThat(context).doesNotHaveBean(ApplicationVersion.class);
+          assertThat(context.getBean(AuditEventContextResolver.class).getContext(null).getApplicationVersion())
+              .isNull();
+        });
+  }
+
+  @Test
+  void testApplicationVersionBacksOffWhenUserBeanIsPresent() {
+    final ApplicationVersion userApplicationVersion = new ApplicationVersion("9.9.9");
+
+    this.runner
+        .withPropertyValues("audit.app-version=1.2.3")
+        .withBean(ApplicationVersion.class, () -> userApplicationVersion)
+        .run(context -> {
+          assertThat(context.getBean(ApplicationVersion.class)).isSameAs(userApplicationVersion);
+          assertThat(context.getBean(AuditEventContextResolver.class).getContext(null).getApplicationVersion())
+              .isSameAs(userApplicationVersion);
+        });
+  }
+
+  @Test
+  void testAuditedEventCarriesTheApplicationVersion() {
+    this.auditingRunner()
+        .withPropertyValues("audit.app-version=1.2.3")
+        .withBean(AuditEventRepository.class, RecordingRepository::new)
+        .run(context -> {
+          final RecordingRepository repository = (RecordingRepository) context.getBean(AuditEventRepository.class);
+
+          context.publishEvent(new ApplicationReadyEvent(new SpringApplication(), new String[0],
+              (ConfigurableApplicationContext) context.getSourceApplicationContext(), null));
+
+          assertThat(repository.events).hasSize(1);
+          assertThat((AuditEvent) repository.events.getFirst())
+              .extracting(AuditEvent::getApplication)
+              .isEqualTo(new Application(new ApplicationName("test-app"), new ApplicationVersion("1.2.3")));
+        });
   }
 
   @Test
@@ -290,6 +389,11 @@ class AuditSupportAutoConfigurationTest {
 
         @Override
         public @Nullable ApplicationName getApplicationName() {
+          return null;
+        }
+
+        @Override
+        public @Nullable ApplicationVersion getApplicationVersion() {
           return null;
         }
 

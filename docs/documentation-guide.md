@@ -18,10 +18,11 @@ here and can be used as a template.
 
 ## Document the common structure once
 
-Start the page by listing the fields every event carries: `type`, `timestamp`, `application_name`, `correlation_id`,
-`trace_id`, `principal` and `data`. Say what the principal means in your application, since that is the field whose
-meaning varies most between systems. If your application always adds a particular member to `data`, say so here rather
-than repeating it in every event.
+Start the page by listing the fields every event carries: `type`, `timestamp`, `application`, `correlation_id`,
+`trace_id`, `principal` and `data`. Note that `application` is a nested member holding a `name` and a `version`, not
+two flat fields - list it as one field and name its two members. Say what the principal means in your application,
+since that is the field whose meaning varies most between systems. If your application always adds a particular member
+to `data`, say so here rather than repeating it in every event.
 
 Do not describe the base structure again for each event. Repetition is where documentation and code drift apart.
 
@@ -93,13 +94,6 @@ described under [Error events](audit-events.html#error-events), plus:
 | :--- | :--- | :--- |
 | `key_id` | The identifier of the key that was to be used. | String |
 ```
-
-## Keep it honest
-
-The most common failure of this kind of documentation is that it describes what was intended rather than what is
-produced. Write each section from the transformer that builds the event, not from the design note that preceded it, and
-check the member names against the code. A single serialized example, taken from a real log rather than written by
-hand, is worth including for anything non-trivial.
 
 -----
 

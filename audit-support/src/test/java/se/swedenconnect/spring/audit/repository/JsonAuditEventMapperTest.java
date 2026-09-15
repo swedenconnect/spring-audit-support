@@ -20,7 +20,9 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
 import se.swedenconnect.spring.audit.AuditEvent;
 import se.swedenconnect.spring.audit.AuditEventBuilder;
+import se.swedenconnect.spring.audit.support.Application;
 import se.swedenconnect.spring.audit.support.ApplicationName;
+import se.swedenconnect.spring.audit.support.ApplicationVersion;
 import se.swedenconnect.spring.audit.tracing.CorrelationID;
 import se.swedenconnect.spring.audit.value.MapAuditValue;
 import se.swedenconnect.spring.audit.value.StringAuditValue;
@@ -61,7 +63,7 @@ class JsonAuditEventMapperTest {
     final String json = this.mapper.write(fullEvent());
     assertThat(json)
         .contains("\"type\":\"login\"")
-        .contains("\"application_name\":\"my-app\"")
+        .contains("\"application\":{\"name\":\"my-app\",\"version\":\"1.2.3\"}")
         .contains("\"correlation_id\":\"corr-123\"")
         .contains("\"principal\":\"alice\"")
         .contains("\"session\":\"S1\"")
@@ -76,6 +78,7 @@ class JsonAuditEventMapperTest {
         .type("login")
         .timestamp(TIMESTAMP)
         .applicationName("my-app")
+        .applicationVersion("1.2.3")
         .correlationId("corr-123")
         .traceId("4bf92f3577b34da6a3ce929d0e0e4736")
         .principal("alice")
@@ -85,7 +88,7 @@ class JsonAuditEventMapperTest {
 
     assertThat(this.mapper.write(event)).isEqualTo("{\"type\":\"login\","
         + "\"timestamp\":\"2026-08-02T10:15:30Z\","
-        + "\"application_name\":\"my-app\","
+        + "\"application\":{\"name\":\"my-app\",\"version\":\"1.2.3\"},"
         + "\"correlation_id\":\"corr-123\","
         + "\"trace_id\":\"4bf92f3577b34da6a3ce929d0e0e4736\","
         + "\"principal\":\"alice\","
@@ -100,7 +103,8 @@ class JsonAuditEventMapperTest {
     assertThat(event.getType()).isEqualTo("login");
     assertThat(event.getPrincipal()).isEqualTo("alice");
     assertThat(event.getTimestamp()).isEqualTo(TIMESTAMP);
-    assertThat(event.getApplicationName()).isEqualTo(new ApplicationName("my-app"));
+    assertThat(event.getApplication())
+        .isEqualTo(new Application(new ApplicationName("my-app"), new ApplicationVersion("1.2.3")));
     assertThat(event.getCorrelationId()).isEqualTo(new CorrelationID("corr-123"));
     assertThat(event.getData()).containsEntry("ip", "1.2.3.4").containsKey("http");
     assertThat(event.getRootFields()).containsExactly(entry("session", "S1"));
@@ -124,10 +128,75 @@ class JsonAuditEventMapperTest {
     final AuditEvent event = (AuditEvent) this.mapper.read(json);
     assertThat(event.getType()).isEqualTo("system_shutdown");
     assertThat(event.getPrincipal()).isEqualTo("system");
-    assertThat(event.getApplicationName()).isNull();
+    assertThat(event.getApplication()).isNull();
     assertThat(event.getCorrelationId()).isNull();
     assertThat(event.getRootFields()).isEmpty();
 
+    assertThat(this.mapper.write(event)).isEqualTo(json);
+  }
+
+  @Test
+  void testWriteOmitsMissingApplicationVersion() {
+    final AuditEvent event = AuditEventBuilder.builder()
+        .type("login")
+        .timestamp(TIMESTAMP)
+        .applicationName("my-app")
+        .principal("alice")
+        .build();
+
+    assertThat(this.mapper.write(event))
+        .contains("\"application\":{\"name\":\"my-app\"}")
+        .doesNotContain("version");
+  }
+
+  @Test
+  void testWriteOmitsMissingApplicationName() {
+    final AuditEvent event = AuditEventBuilder.builder()
+        .type("login")
+        .timestamp(TIMESTAMP)
+        .applicationVersion("1.2.3")
+        .principal("alice")
+        .build();
+
+    assertThat(this.mapper.write(event))
+        .contains("\"application\":{\"version\":\"1.2.3\"}")
+        .doesNotContain("name");
+  }
+
+  @Test
+  void testWriteOmitsTheApplicationWhenNeitherIsAvailable() {
+    final AuditEvent event = AuditEventBuilder.builder()
+        .type("login")
+        .timestamp(TIMESTAMP)
+        .principal("alice")
+        .build();
+
+    assertThat(this.mapper.write(event)).doesNotContain("application");
+  }
+
+  @Test
+  void testRoundTripApplicationWithOnlyAName() {
+    final String json = this.mapper.write(AuditEventBuilder.builder()
+        .type("login")
+        .timestamp(TIMESTAMP)
+        .applicationName("my-app")
+        .build());
+
+    final AuditEvent event = (AuditEvent) this.mapper.read(json);
+    assertThat(event.getApplication()).isEqualTo(new Application(new ApplicationName("my-app"), null));
+    assertThat(this.mapper.write(event)).isEqualTo(json);
+  }
+
+  @Test
+  void testRoundTripApplicationWithOnlyAVersion() {
+    final String json = this.mapper.write(AuditEventBuilder.builder()
+        .type("login")
+        .timestamp(TIMESTAMP)
+        .applicationVersion("1.2.3")
+        .build());
+
+    final AuditEvent event = (AuditEvent) this.mapper.read(json);
+    assertThat(event.getApplication()).isEqualTo(new Application(null, new ApplicationVersion("1.2.3")));
     assertThat(this.mapper.write(event)).isEqualTo(json);
   }
 
@@ -147,7 +216,7 @@ class JsonAuditEventMapperTest {
     final AuditEvent event = (AuditEvent) this.mapper.read(this.mapper.write(spring));
     assertThat(event.getPrincipal()).isEqualTo("bob");
     assertThat(event.getType()).isEqualTo("login");
-    assertThat(event.getApplicationName()).isNull();
+    assertThat(event.getApplication()).isNull();
     assertThat(event.getCorrelationId()).isNull();
     assertThat(event.getData()).containsEntry("k", "v");
   }
@@ -165,6 +234,7 @@ class JsonAuditEventMapperTest {
         .type("login")
         .timestamp(TIMESTAMP)
         .applicationName("my-app")
+        .applicationVersion("1.2.3")
         .correlationId("corr-123")
         .principal("alice")
         .rootField(new StringAuditValue("session", "S1"))

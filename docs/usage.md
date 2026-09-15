@@ -72,9 +72,11 @@ Before a transformer is invoked, the listener asks its
 for an
 [`AuditEventContext`](https://github.com/swedenconnect/spring-audit-support/blob/main/audit-support/src/main/java/se/swedenconnect/spring/audit/AuditEventContext.java).
 The context carries the ambient facts that every audit event needs and that no individual transformer should have to
-work out for itself: the application name, the correlation ID, the trace ID and the principal.
+work out for itself: the application name, the application version, the correlation ID, the trace ID and the
+principal.
 
-The default resolver takes the application name from configuration, the correlation ID and trace ID from the
+The default resolver takes the application name and version from configuration, the correlation ID and trace ID from
+the
 [identifier storage](tracing.html), and the principal from the Spring Security context, falling back to a configured
 default principal when no user is authenticated.
 
@@ -94,13 +96,17 @@ Every audit event has the same base fields:
 | :--- | :--- |
 | `type` | The audit event type, the unique name identifying the kind of event. |
 | `timestamp` | The instant when the event occurred. The current time is used if none is supplied. |
-| `application_name` | The name of the application that produced the event. Omitted if not available. |
+| `application` | The application that produced the event, holding a `name` and a `version`. Each member is omitted if not available, and the whole field is omitted if neither is. |
 | `correlation_id` | The correlation ID tying the event to a flow that may span several requests. Omitted if not available. |
 | `trace_id` | The trace ID tying the event to a single request, possibly handled by several services. Omitted if not available. |
 | `principal` | The initiator of the audited operation. For events not tied to an end user the system principal, `system`, is normally used. Omitted if not available. |
 | `data` | An object holding the event-specific content. Its members are defined by the individual event. |
 
-The application name matters when logs from several applications are shipped to the same log server. The correlation ID
+The two values of `application` describe one subject, the producing application, which is why they sit together in one
+member rather than as siblings at the root. The name matters when logs from several applications are shipped to the
+same log server, and the version tells which build of that application produced the entry - which matters when several
+versions run at once, or when an entry is read long after it was written. The version is optional, see
+[Configuration](configuration.html#application-version). The correlation ID
 and the trace ID are what let entries be grouped, and they are two different things: a correlation ID may span many
 requests, a trace ID lives within one. See [Correlation ID and Trace ID](tracing.html).
 
@@ -112,7 +118,10 @@ A serialized event has this shape:
 {
   "type": "user_login",
   "timestamp": "2026-07-31T09:12:44.001Z",
-  "application_name": "my-service",
+  "application": {
+    "name": "my-service",
+    "version": "1.2.3"
+  },
   "correlation_id": "b1f2c3d4-8a91-4f0e-9c22-7b5d3e1a0f44",
   "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
   "principal": "198501011234",
@@ -224,7 +233,8 @@ structured audit log.
 ## Building an audit event
 
 [`AuditEventBuilder`](https://github.com/swedenconnect/spring-audit-support/blob/main/audit-support/src/main/java/se/swedenconnect/spring/audit/AuditEventBuilder.java)
-assembles the event. Inside a transformer, build it from the context, which initializes the application name,
+assembles the event. Inside a transformer, build it from the context, which initializes the application name and
+version,
 correlation ID, trace ID and principal for you:
 
 ```java

@@ -24,6 +24,7 @@ import org.springframework.data.mongodb.core.MongoOperations;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.util.StringUtils;
+import se.swedenconnect.spring.audit.support.Application;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -37,14 +38,15 @@ import java.util.Optional;
  * {@link org.springframework.data.mongodb.core.MongoOperations MongoOperations} (typically a {@code MongoTemplate}).
  * <p>
  * Each audit event is stored as a document. A set of fields ({@code eventTime}, {@code principal}, {@code eventType},
- * {@code applicationName}, {@code correlationId}) is used for querying, while the complete event is stored as JSON in
- * the {@code eventData} field using an {@link AuditEventMapper}. On read, the event is reconstructed from the
+ * {@code applicationName}, {@code applicationVersion}, {@code correlationId}) is used for querying, while the complete
+ * event is stored as JSON in the {@code eventData} field using an {@link AuditEventMapper}. The two application fields
+ * are taken from the {@code application} field of a structured event. On read, the event is reconstructed from the
  * {@code eventData} field, so no information is lost. Timestamps are stored as UTC instants.
  * </p>
  * <p>
  * The collection name is configurable (defaulting to {@value #DEFAULT_COLLECTION_NAME}); the field names are fixed. See
- * {@code docs/mongo.md}. An application whose schema differs should implement {@link MongoAuditEventDao} directly
- * instead of using this class.
+ * {@code docs/repositories.md}. An application whose schema differs should implement {@link MongoAuditEventDao}
+ * directly instead of using this class.
  * </p>
  *
  * @author Martin Lindström
@@ -65,6 +67,9 @@ public class DefaultMongoAuditEventDao implements MongoAuditEventDao {
 
   /** The {@code applicationName} field. */
   private static final String APPLICATION_NAME = "applicationName";
+
+  /** The {@code applicationVersion} field. */
+  private static final String APPLICATION_VERSION = "applicationVersion";
 
   /** The {@code correlationId} field. */
   private static final String CORRELATION_ID = "correlationId";
@@ -113,8 +118,11 @@ public class DefaultMongoAuditEventDao implements MongoAuditEventDao {
   public void save(final @NonNull AuditEvent event) {
     final se.swedenconnect.spring.audit.AuditEvent structured =
         event instanceof final se.swedenconnect.spring.audit.AuditEvent e ? e : null;
-    final String applicationName = structured != null && structured.getApplicationName() != null
-        ? structured.getApplicationName().getName() : null;
+    final Application application = structured != null ? structured.getApplication() : null;
+    final String applicationName = application != null && application.getName() != null
+        ? application.getName().getName() : null;
+    final String applicationVersion = application != null && application.getVersion() != null
+        ? application.getVersion().getVersion() : null;
     final String correlationId = structured != null && structured.getCorrelationId() != null
         ? structured.getCorrelationId().getValue() : null;
 
@@ -123,6 +131,7 @@ public class DefaultMongoAuditEventDao implements MongoAuditEventDao {
         .append(PRINCIPAL, event.getPrincipal())
         .append(EVENT_TYPE, event.getType())
         .append(APPLICATION_NAME, applicationName)
+        .append(APPLICATION_VERSION, applicationVersion)
         .append(CORRELATION_ID, correlationId)
         .append(EVENT_DATA, this.eventMapper.write(event));
     this.mongoOperations.insert(document, this.collectionName);

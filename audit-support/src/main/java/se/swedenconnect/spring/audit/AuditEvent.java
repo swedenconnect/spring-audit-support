@@ -23,7 +23,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
-import se.swedenconnect.spring.audit.support.ApplicationName;
+import se.swedenconnect.spring.audit.support.Application;
 import se.swedenconnect.spring.audit.tracing.CorrelationID;
 import se.swedenconnect.spring.audit.tracing.TraceID;
 import se.swedenconnect.spring.audit.value.AuditValue;
@@ -42,12 +42,13 @@ import java.util.Optional;
  * An extension of Spring's {@link org.springframework.boot.actuate.audit.AuditEvent} that adds more structure to the
  * audit event.
  * <p>
- * Compared to Spring's {@link org.springframework.boot.actuate.audit.AuditEvent}, {@code correlation_id},
- * {@code trace_id} and {@code application_name} fields are added on root level. The application name is useful to
- * include if logs from several different applications are sent to a log server. The correlation ID and traceID are
- * useful to include so that several entries may be grouped together. A correlation ID groups events from a specific
- * operation that may span over several requests, where a trace ID groups events from the same request (but possibly
- * distributed over several services).
+ * Compared to Spring's {@link org.springframework.boot.actuate.audit.AuditEvent}, {@code application},
+ * {@code correlation_id} and {@code trace_id} fields are added on root level. The {@code application} field describes
+ * the application that produced the event - its name, which is useful to include if logs from several different
+ * applications are sent to a log server, and its version, which tells which build of that application produced the
+ * event. The correlation ID and traceID are useful to include so that several entries may be grouped together. A
+ * correlation ID groups events from a specific operation that may span over several requests, where a trace ID groups
+ * events from the same request (but possibly distributed over several services).
  * </p>
  * <p>
  * It is also possible to add additional fields by supplying them in the {@code rootFields} parameter of the
@@ -73,8 +74,9 @@ import java.util.Optional;
  *       <td>The instant when the event occurred. The current time is used if none is supplied.</td>
  *     </tr>
  *     <tr>
- *       <td>{@code application_name}</td>
- *       <td>The name of the application that produced the event. Optional &ndash; omitted if not available.</td>
+ *       <td>{@code application}</td>
+ *       <td>The application that produced the event, holding its {@code name} and its {@code version}. Both members
+ *         are optional and each is omitted if not available. The whole field is omitted if neither is available.</td>
  *     </tr>
  *     <tr>
  *       <td>{@code correlation_id}</td>
@@ -106,7 +108,10 @@ import java.util.Optional;
  * {
  *   "type": "the_event_type",
  *   "timestamp": "2026-07-31T09:12:44.001Z",
- *   "application_name": "my-service",
+ *   "application": {
+ *     "name": "my-service",
+ *     "version": "1.2.3"
+ *   },
  *   "correlation_id": "b1f2c3d4-...",
  *   "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
  *   "principal": "system",
@@ -123,7 +128,7 @@ import java.util.Optional;
  * @author Martin Lindström
  * @see AuditEventBuilder
  */
-@JsonPropertyOrder({ "type", "timestamp", "application_name", "correlation_id", "trace_id", "principal" })
+@JsonPropertyOrder({ "type", "timestamp", "application", "correlation_id", "trace_id", "principal" })
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class AuditEvent extends org.springframework.boot.actuate.audit.AuditEvent {
@@ -134,9 +139,9 @@ public class AuditEvent extends org.springframework.boot.actuate.audit.AuditEven
   /** Symbolic constant representing the system principal. */
   public static final String SYSTEM_PRINCIPAL = "system";
 
-  /** The application name. */
-  @JsonProperty(value = "application_name", required = false)
-  private final ApplicationName applicationName;
+  /** The application that produced the event. */
+  @JsonProperty(value = "application", required = false)
+  private final Application application;
 
   /** The correlation ID. */
   @JsonProperty(value = "correlation_id", required = false)
@@ -154,7 +159,8 @@ public class AuditEvent extends org.springframework.boot.actuate.audit.AuditEven
    *
    * @param type the audit event type, i.e., the unique name for this event
    * @param timestamp the instant when the event occurred, if {@code null}, the current time is used
-   * @param applicationName name of the application that performs the audit logging (optional)
+   * @param application the application that performs the audit logging (optional). An
+   *     {@link Application#isEmpty() empty} application object is treated as if none was supplied
    * @param correlationId the correlation ID (optional)
    * @param traceId WRC Trace Context traceId (optional)
    * @param principal the optional principal name for the event
@@ -164,12 +170,12 @@ public class AuditEvent extends org.springframework.boot.actuate.audit.AuditEven
    *     the event.
    */
   public AuditEvent(final @NonNull AuditType type, final @Nullable Instant timestamp,
-      final @Nullable ApplicationName applicationName, final @Nullable CorrelationID correlationId,
+      final @Nullable Application application, final @Nullable CorrelationID correlationId,
       final @Nullable TraceID traceId, final @Nullable String principal,
       final @Nullable List<AuditValue<? extends Serializable>> rootFields,
       final @Nullable List<AuditValue<? extends Serializable>> dataFields) {
     super(Optional.ofNullable(timestamp).orElseGet(Instant::now), principal, type.type(), buildDataMap(dataFields));
-    this.applicationName = applicationName;
+    this.application = application != null && !application.isEmpty() ? application : null;
     this.correlationId = correlationId;
     this.traceId = traceId;
     if (rootFields != null) {
@@ -185,7 +191,7 @@ public class AuditEvent extends org.springframework.boot.actuate.audit.AuditEven
    * Creates an {@link AuditEvent} from its parsed JSON representation. Used by Jackson when deserializing an audit
    * event.
    * <p>
-   * Unlike {@link #AuditEvent(AuditType, Instant, ApplicationName, CorrelationID, TraceID, String, List, List)}, the
+   * Unlike {@link #AuditEvent(AuditType, Instant, Application, CorrelationID, TraceID, String, List, List)}, the
    * fields are assigned verbatim from the parsed representation, i.e., there is <em>no</em> fall back to the MDC for
    * the correlation ID. Any properties that are not part of the base structure are collected as
    * {@link #getRootFields() root fields}.
@@ -193,7 +199,7 @@ public class AuditEvent extends org.springframework.boot.actuate.audit.AuditEven
    *
    * @param type the audit event type
    * @param timestamp the timestamp (the current time is used if {@code null})
-   * @param applicationName the application name (or {@code null})
+   * @param application the application that produced the event (or {@code null})
    * @param correlationId the correlation ID (or {@code null})
    * @param traceId WRC Trace Context traceId (or {@code null})
    * @param principal the principal (or {@code null})
@@ -204,12 +210,12 @@ public class AuditEvent extends org.springframework.boot.actuate.audit.AuditEven
   static @NonNull AuditEvent fromJson(
       @JsonProperty("type") final @NonNull String type,
       @JsonProperty("timestamp") final @Nullable Instant timestamp,
-      @JsonProperty("application_name") final @Nullable String applicationName,
+      @JsonProperty("application") final @Nullable Application application,
       @JsonProperty("correlation_id") final @Nullable String correlationId,
       @JsonProperty("trace_id") final @Nullable String traceId,
       @JsonProperty("principal") final @Nullable String principal,
       @JsonProperty("data") final @Nullable Map<String, Object> data) {
-    return new AuditEvent(type, timestamp, applicationName, correlationId, traceId, principal, data);
+    return new AuditEvent(type, timestamp, application, correlationId, traceId, principal, data);
   }
 
   /**
@@ -217,18 +223,18 @@ public class AuditEvent extends org.springframework.boot.actuate.audit.AuditEven
    *
    * @param type the audit event type
    * @param timestamp the timestamp (the current time is used if {@code null})
-   * @param applicationName the application name (or {@code null})
+   * @param application the application that produced the event (or {@code null})
    * @param correlationId the correlation ID (or {@code null})
    * @param traceId WRC Trace Context traceId (or {@code null})
    * @param principal the principal (or {@code null})
    * @param data the event data (or {@code null})
    */
   private AuditEvent(final @NonNull String type, final @Nullable Instant timestamp,
-      final @Nullable String applicationName, final @Nullable String correlationId, final @Nullable String traceId,
+      final @Nullable Application application, final @Nullable String correlationId, final @Nullable String traceId,
       final @Nullable String principal, final @Nullable Map<String, Object> data) {
     super(Optional.ofNullable(timestamp).orElseGet(Instant::now), principal, type,
         data != null ? data : Map.of());
-    this.applicationName = applicationName != null ? new ApplicationName(applicationName) : null;
+    this.application = application != null && !application.isEmpty() ? application : null;
     this.correlationId = correlationId != null ? new CorrelationID(correlationId) : null;
     this.traceId = traceId != null ? new TraceID(traceId) : null;
     this.rootFields = new LinkedHashMap<>();
@@ -259,12 +265,12 @@ public class AuditEvent extends org.springframework.boot.actuate.audit.AuditEven
   }
 
   /**
-   * Gets the application name.
+   * Gets the application that produced the event, i.e., its name and version.
    *
-   * @return the application name, or {@code null} if not available
+   * @return the {@link Application}, or {@code null} if neither a name nor a version is available
    */
-  public @Nullable ApplicationName getApplicationName() {
-    return this.applicationName;
+  public @Nullable Application getApplication() {
+    return this.application;
   }
 
   /**
@@ -277,7 +283,7 @@ public class AuditEvent extends org.springframework.boot.actuate.audit.AuditEven
   }
 
   /**
-   * Gets the <a href="https://www.w3.org/TR/trace-context/#trace-id"></a>W3C Trace Context trace-id</a>.
+   * Gets the <a href="https://www.w3.org/TR/trace-context/#trace-id">W3C Trace Context trace-id</a>.
    *
    * @return the trace ID, or {@code null} if not available
    */

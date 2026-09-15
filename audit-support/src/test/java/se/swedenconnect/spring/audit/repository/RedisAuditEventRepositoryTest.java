@@ -28,6 +28,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 import se.swedenconnect.spring.audit.AuditEventBuilder;
+import se.swedenconnect.spring.audit.support.Application;
 import se.swedenconnect.spring.audit.support.ApplicationName;
 import se.swedenconnect.spring.audit.tracing.CorrelationID;
 import tools.jackson.databind.json.JsonMapper;
@@ -115,7 +116,7 @@ class RedisAuditEventRepositoryTest {
     assertThat(structured.getType()).isEqualTo("login");
     assertThat(structured.getPrincipal()).isEqualTo("alice");
     assertThat(structured.getTimestamp()).isEqualTo(Instant.parse("2026-01-01T10:00:00Z"));
-    assertThat(structured.getApplicationName()).isEqualTo(new ApplicationName("app"));
+    assertThat(structured.getApplication()).isEqualTo(new Application(new ApplicationName("app"), null));
     assertThat(structured.getCorrelationId()).isEqualTo(new CorrelationID("corr-login"));
   }
 

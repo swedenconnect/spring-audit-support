@@ -16,7 +16,8 @@ All events carry the [common audit event structure](usage.html#the-audit-event):
 
 - `type` - The audit event type, see below.
 - `timestamp` - The instant when the event occurred.
-- `application_name` - The name of the application that produced the event.
+- `application` - The application that produced the event, holding its `name` and its `version`. Both members are
+  optional.
 - `correlation_id` - The correlation ID tying the event to a flow that may span several requests.
 - `trace_id` - The trace ID tying the event to a single request.
 - `principal` - The initiator of the audited operation.

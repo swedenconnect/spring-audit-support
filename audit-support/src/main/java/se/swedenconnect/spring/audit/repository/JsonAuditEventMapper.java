@@ -26,7 +26,7 @@ import java.util.Objects;
  * A JSON {@link AuditEventMapper}.
  * <p>
  * Events are read back as {@link se.swedenconnect.spring.audit.AuditEvent structured audit events}, so that the
- * {@code application_name}, {@code correlation_id} and any additional root-level fields survive a
+ * {@code application}, {@code correlation_id}, {@code trace_id} and any additional root-level fields survive a
  * {@link #write(AuditEvent) write}/{@link #read(String) read} round trip.
  * </p>
  *

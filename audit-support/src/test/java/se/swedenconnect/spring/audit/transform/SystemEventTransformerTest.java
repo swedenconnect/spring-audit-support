@@ -23,6 +23,7 @@ import org.springframework.context.support.StaticApplicationContext;
 import se.swedenconnect.spring.audit.AuditEvent;
 import se.swedenconnect.spring.audit.AuditEventContext;
 import se.swedenconnect.spring.audit.DefaultAuditEventContextResolver;
+import se.swedenconnect.spring.audit.support.Application;
 import se.swedenconnect.spring.audit.support.ApplicationName;
 
 import java.time.Instant;
@@ -42,7 +43,7 @@ class SystemEventTransformerTest {
 
   private static AuditEventContext context() {
     final DefaultAuditEventContextResolver resolver =
-        new DefaultAuditEventContextResolver(new ApplicationName("test-app"));
+        new DefaultAuditEventContextResolver(new ApplicationName("test-app"), null);
     return resolver.getContext(null);
   }
 
@@ -66,7 +67,7 @@ class SystemEventTransformerTest {
     assertThat(auditEvent.getType()).isEqualTo("system_started");
     assertThat(auditEvent.getTimestamp()).isEqualTo(Instant.ofEpochMilli(1000L));
     assertThat(auditEvent.getPrincipal()).isEqualTo(AuditEvent.SYSTEM_PRINCIPAL);
-    assertThat(auditEvent.getApplicationName()).isEqualTo(new ApplicationName("test-app"));
+    assertThat(auditEvent.getApplication()).isEqualTo(new Application(new ApplicationName("test-app"), null));
   }
 
   @Test
@@ -79,7 +80,7 @@ class SystemEventTransformerTest {
     assertThat(auditEvent.getType()).isEqualTo("system_shutdown");
     assertThat(auditEvent.getTimestamp()).isEqualTo(Instant.ofEpochMilli(event.getTimestamp()));
     assertThat(auditEvent.getPrincipal()).isEqualTo(AuditEvent.SYSTEM_PRINCIPAL);
-    assertThat(auditEvent.getApplicationName()).isEqualTo(new ApplicationName("test-app"));
+    assertThat(auditEvent.getApplication()).isEqualTo(new Application(new ApplicationName("test-app"), null));
   }
 
   @Test

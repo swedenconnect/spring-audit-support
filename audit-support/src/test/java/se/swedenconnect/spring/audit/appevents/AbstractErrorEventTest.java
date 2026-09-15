@@ -24,6 +24,7 @@ import se.swedenconnect.spring.audit.AuditEventBuilder;
 import se.swedenconnect.spring.audit.AuditEventContext;
 import se.swedenconnect.spring.audit.AuditType;
 import se.swedenconnect.spring.audit.DefaultAuditEventContextResolver;
+import se.swedenconnect.spring.audit.support.Application;
 import se.swedenconnect.spring.audit.support.ApplicationName;
 import se.swedenconnect.spring.audit.value.AuditValueConstants;
 
@@ -46,7 +47,7 @@ class AbstractErrorEventTest {
 
   private static AuditEventContext context() {
     final DefaultAuditEventContextResolver resolver =
-        new DefaultAuditEventContextResolver(new ApplicationName("test-app"));
+        new DefaultAuditEventContextResolver(new ApplicationName("test-app"), null);
     resolver.setDefaultPrincipal(AuditEvent.SYSTEM_PRINCIPAL);
     return resolver.getContext(null);
   }
@@ -79,7 +80,7 @@ class AbstractErrorEventTest {
     assertThat(auditEvent.getType()).isEqualTo(ERROR_TYPE.type());
     assertThat(auditEvent.getTimestamp()).isEqualTo(Instant.ofEpochMilli(event.getTimestamp()));
     assertThat(auditEvent.getPrincipal()).isEqualTo(AuditEvent.SYSTEM_PRINCIPAL);
-    assertThat(auditEvent.getApplicationName()).isEqualTo(new ApplicationName("test-app"));
+    assertThat(auditEvent.getApplication()).isEqualTo(new Application(new ApplicationName("test-app"), null));
 
     assertThat(error(auditEvent))
         .containsEntry("code", "E1")
