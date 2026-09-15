@@ -25,7 +25,7 @@
   <parent>
     <groupId>se.swedenconnect.spring.audit</groupId>
     <artifactId>audit-support-parent</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1-SNAPSHOT</version>
   </parent>
 
   <name>Sweden Connect :: Spring Audit Support :: Spring Boot Autoconfigure Module</name>

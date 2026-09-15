@@ -21,7 +21,7 @@
   <groupId>se.swedenconnect.spring.audit</groupId>
   <artifactId>audit-support-parent</artifactId>
   <packaging>pom</packaging>
-  <version>1.0.0</version>
+  <version>1.0.1-SNAPSHOT</version>
 
   <name>Sweden Connect :: Spring Audit Support :: Parent POM</name>
   <description>Parent POM for Spring Audit Support libraries</description>

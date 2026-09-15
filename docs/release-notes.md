@@ -4,9 +4,15 @@
 
 ![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)
 
+### Version 1.0.1
+
+**Date:** _Not yet released_
+
+- Initial version.
+
 ### Version 1.0.0
 
-Date: 2026-09-15
+**Date:** 2026-09-15
 
 - Initial version.
 
