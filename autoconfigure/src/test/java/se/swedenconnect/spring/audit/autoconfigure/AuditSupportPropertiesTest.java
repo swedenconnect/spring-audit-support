@@ -57,6 +57,22 @@ class AuditSupportPropertiesTest {
   }
 
   @Test
+  void testNoAppVersionIsAssigned() {
+    assertThat(new AuditSupportProperties().getAppVersion()).isNull();
+  }
+
+  @Test
+  void testAppVersion() {
+    final AuditSupportProperties properties = new AuditSupportProperties();
+    properties.setAppVersion("1.2.3");
+
+    assertThat(properties.getAppVersion()).isEqualTo("1.2.3");
+
+    properties.setAppVersion(null);
+    assertThat(properties.getAppVersion()).isNull();
+  }
+
+  @Test
   void testPrefix() {
     assertThat(AuditSupportProperties.PREFIX).isEqualTo("audit");
   }

@@ -16,7 +16,9 @@
 package se.swedenconnect.spring.audit;
 
 import org.junit.jupiter.api.Test;
+import se.swedenconnect.spring.audit.support.Application;
 import se.swedenconnect.spring.audit.support.ApplicationName;
+import se.swedenconnect.spring.audit.support.ApplicationVersion;
 import se.swedenconnect.spring.audit.tracing.CorrelationID;
 import se.swedenconnect.spring.audit.tracing.TraceID;
 import se.swedenconnect.spring.audit.value.AuditValue;
@@ -44,14 +46,16 @@ class AuditEventTest {
   @Test
   void testFullEvent() {
     final AuditEvent event = new AuditEvent(AuditType.of("login"), TIMESTAMP,
-        new ApplicationName("my-app"), CorrelationID.of("corr-123"), TraceID.of("trace-1"), "alice",
+        new Application(new ApplicationName("my-app"), new ApplicationVersion("1.2.3")),
+        CorrelationID.of("corr-123"), TraceID.of("trace-1"), "alice",
         List.of(new StringAuditValue("session", "S1")),
         List.of(new StringAuditValue("ip", "1.2.3.4"), new MapAuditValue("http", Map.of("method", "GET"))));
 
     assertThat(event.getType()).isEqualTo("login");
     assertThat(event.getTimestamp()).isEqualTo(TIMESTAMP);
     assertThat(event.getPrincipal()).isEqualTo("alice");
-    assertThat(event.getApplicationName()).isEqualTo(new ApplicationName("my-app"));
+    assertThat(event.getApplication())
+        .isEqualTo(new Application(new ApplicationName("my-app"), new ApplicationVersion("1.2.3")));
     assertThat(event.getCorrelationId()).isEqualTo(CorrelationID.of("corr-123"));
     assertThat(event.getTraceId()).isEqualTo(TraceID.of("trace-1"));
     assertThat(event.getRootFields()).containsExactly(entry("session", "S1"));
@@ -64,7 +68,7 @@ class AuditEventTest {
         new AuditEvent(AuditType.of("login"), TIMESTAMP, null, null, null, null, null, null);
 
     assertThat(event.getType()).isEqualTo("login");
-    assertThat(event.getApplicationName()).isNull();
+    assertThat(event.getApplication()).isNull();
     assertThat(event.getCorrelationId()).isNull();
     assertThat(event.getTraceId()).isNull();
     // Spring's AuditEvent normalizes a missing principal to an empty string.
@@ -108,6 +112,34 @@ class AuditEventTest {
         new AuditEvent(AuditType.of("login"), TIMESTAMP, null, null, null, null, rootFields, null);
 
     assertThat(event.getRootFields()).containsExactly(entry("b", "2"), entry("a", "1"));
+  }
+
+  @Test
+  void testApplicationWithOnlyAName() {
+    final AuditEvent event = new AuditEvent(AuditType.of("login"), TIMESTAMP,
+        new Application(new ApplicationName("my-app"), null), null, null, null, null, null);
+
+    assertThat(event.getApplication()).isNotNull();
+    assertThat(event.getApplication().getName()).isEqualTo(new ApplicationName("my-app"));
+    assertThat(event.getApplication().getVersion()).isNull();
+  }
+
+  @Test
+  void testApplicationWithOnlyAVersion() {
+    final AuditEvent event = new AuditEvent(AuditType.of("login"), TIMESTAMP,
+        new Application(null, new ApplicationVersion("1.2.3")), null, null, null, null, null);
+
+    assertThat(event.getApplication()).isNotNull();
+    assertThat(event.getApplication().getName()).isNull();
+    assertThat(event.getApplication().getVersion()).isEqualTo(new ApplicationVersion("1.2.3"));
+  }
+
+  @Test
+  void testEmptyApplicationIsTreatedAsNoApplication() {
+    final AuditEvent event =
+        new AuditEvent(AuditType.of("login"), TIMESTAMP, new Application(null, null), null, null, null, null, null);
+
+    assertThat(event.getApplication()).isNull();
   }
 
   @Test

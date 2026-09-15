@@ -56,7 +56,7 @@ class AuditApplicationListenerTest {
   }
 
   private static AuditEventContextResolver contextResolver() {
-    return new DefaultAuditEventContextResolver(new ApplicationName("test-app"));
+    return new DefaultAuditEventContextResolver(new ApplicationName("test-app"), null);
   }
 
   @AfterEach

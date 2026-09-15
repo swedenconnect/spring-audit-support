@@ -20,6 +20,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.boot.actuate.audit.AuditEvent;
 import org.springframework.boot.actuate.audit.AuditEventRepository;
 import se.swedenconnect.spring.audit.AuditType;
+import se.swedenconnect.spring.audit.support.Application;
 import se.swedenconnect.spring.audit.support.ApplicationName;
 import se.swedenconnect.spring.audit.tracing.CorrelationID;
 
@@ -138,7 +139,8 @@ public interface ExtendedAuditEventRepository extends AuditEventRepository {
   static @NonNull Predicate<AuditEvent> applicationName(final @NonNull ApplicationName applicationName) {
     return event -> {
       if (event instanceof final se.swedenconnect.spring.audit.AuditEvent extEvent) {
-        return Objects.equals(extEvent.getApplicationName(), applicationName);
+        final Application application = extEvent.getApplication();
+        return application != null && Objects.equals(application.getName(), applicationName);
       }
       else {
         return false;

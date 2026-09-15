@@ -23,6 +23,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
 import se.swedenconnect.spring.audit.support.ApplicationName;
+import se.swedenconnect.spring.audit.support.ApplicationVersion;
 import se.swedenconnect.spring.audit.tracing.CorrelationID;
 import se.swedenconnect.spring.audit.tracing.CorrelationIDHolder;
 import se.swedenconnect.spring.audit.tracing.TraceID;
@@ -48,36 +49,53 @@ class DefaultAuditEventContextResolverTest {
   @Test
   void testApplicationName() {
     final ApplicationName applicationName = new ApplicationName("test-app");
-    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(applicationName);
+    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(applicationName, null);
 
     assertThat(resolver.getContext(null).getApplicationName()).isSameAs(applicationName);
   }
 
   @Test
   void testNoApplicationName() {
-    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null);
+    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null, null);
 
     assertThat(resolver.getContext(null).getApplicationName()).isNull();
   }
 
   @Test
+  void testApplicationVersion() {
+    final ApplicationVersion applicationVersion = new ApplicationVersion("1.2.3");
+    final DefaultAuditEventContextResolver resolver =
+        new DefaultAuditEventContextResolver(new ApplicationName("test-app"), applicationVersion);
+
+    assertThat(resolver.getContext(null).getApplicationVersion()).isSameAs(applicationVersion);
+  }
+
+  @Test
+  void testNoApplicationVersion() {
+    final DefaultAuditEventContextResolver resolver =
+        new DefaultAuditEventContextResolver(new ApplicationName("test-app"), null);
+
+    assertThat(resolver.getContext(null).getApplicationVersion()).isNull();
+  }
+
+  @Test
   void testCorrelationIdFromHolder() {
     CorrelationIDHolder.set(CorrelationID.of("abc-123"));
-    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null);
+    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null, null);
 
     assertThat(resolver.getContext(null).getCorrelationId()).isEqualTo(CorrelationID.of("abc-123"));
   }
 
   @Test
   void testNoCorrelationId() {
-    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null);
+    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null, null);
 
     assertThat(resolver.getContext(null).getCorrelationId()).isNull();
   }
 
   @Test
   void testNoTraceId() {
-    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null);
+    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null, null);
 
     assertThat(resolver.getContext(null).getTraceId()).isNull();
   }
@@ -85,7 +103,7 @@ class DefaultAuditEventContextResolverTest {
   @Test
   void testTraceIdFromHolder() {
     TraceIDWriter.set(TraceID.of("4bf92f3577b34da6a3ce929d0e0e4736"));
-    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null);
+    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null, null);
 
     assertThat(resolver.getContext(null).getTraceId())
         .isEqualTo(TraceID.of("4bf92f3577b34da6a3ce929d0e0e4736"));
@@ -95,7 +113,7 @@ class DefaultAuditEventContextResolverTest {
   void testPrincipalFromSecurityContext() {
     SecurityContextHolder.getContext().setAuthentication(
         UsernamePasswordAuthenticationToken.authenticated("alice", null, List.of()));
-    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null);
+    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null, null);
     resolver.setDefaultPrincipal(AuditEvent.SYSTEM_PRINCIPAL);
 
     assertThat(resolver.getContext(null).getPrincipal()).isEqualTo("alice");
@@ -103,14 +121,14 @@ class DefaultAuditEventContextResolverTest {
 
   @Test
   void testNoAuthenticationAndNoDefaultPrincipal() {
-    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null);
+    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null, null);
 
     assertThat(resolver.getContext(null).getPrincipal()).isNull();
   }
 
   @Test
   void testNoAuthenticationGivesDefaultPrincipal() {
-    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null);
+    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null, null);
     resolver.setDefaultPrincipal(AuditEvent.SYSTEM_PRINCIPAL);
 
     assertThat(resolver.getContext(null).getPrincipal()).isEqualTo(AuditEvent.SYSTEM_PRINCIPAL);
@@ -120,7 +138,7 @@ class DefaultAuditEventContextResolverTest {
   void testUnauthenticatedAuthenticationGivesDefaultPrincipal() {
     SecurityContextHolder.getContext().setAuthentication(
         UsernamePasswordAuthenticationToken.unauthenticated("alice", null));
-    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null);
+    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null, null);
     resolver.setDefaultPrincipal(AuditEvent.SYSTEM_PRINCIPAL);
 
     assertThat(resolver.getContext(null).getPrincipal()).isEqualTo(AuditEvent.SYSTEM_PRINCIPAL);
@@ -130,7 +148,7 @@ class DefaultAuditEventContextResolverTest {
   void testAnonymousAuthenticationGivesDefaultPrincipal() {
     SecurityContextHolder.getContext().setAuthentication(new AnonymousAuthenticationToken(
         "key", "anonymousUser", AuthorityUtils.createAuthorityList("ROLE_ANONYMOUS")));
-    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null);
+    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null, null);
     resolver.setDefaultPrincipal(AuditEvent.SYSTEM_PRINCIPAL);
 
     assertThat(resolver.getContext(null).getPrincipal()).isEqualTo(AuditEvent.SYSTEM_PRINCIPAL);
@@ -140,7 +158,7 @@ class DefaultAuditEventContextResolverTest {
   void testAnonymousAuthenticationAndNoDefaultPrincipal() {
     SecurityContextHolder.getContext().setAuthentication(new AnonymousAuthenticationToken(
         "key", "anonymousUser", AuthorityUtils.createAuthorityList("ROLE_ANONYMOUS")));
-    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null);
+    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null, null);
 
     assertThat(resolver.getContext(null).getPrincipal()).isNull();
   }
@@ -150,7 +168,7 @@ class DefaultAuditEventContextResolverTest {
     CorrelationIDHolder.set(CorrelationID.of("abc-123"));
     SecurityContextHolder.getContext().setAuthentication(
         UsernamePasswordAuthenticationToken.authenticated("alice", null, List.of()));
-    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null);
+    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null, null);
     final AuditEventContext context = resolver.getContext("some-state-information");
 
     assertThat(context.getCorrelationId()).isEqualTo(CorrelationID.of("abc-123"));
@@ -159,7 +177,7 @@ class DefaultAuditEventContextResolverTest {
 
   @Test
   void testContextIsResolvedWhenInvoked() {
-    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null);
+    final DefaultAuditEventContextResolver resolver = new DefaultAuditEventContextResolver(null, null);
     final AuditEventContext context = resolver.getContext(null);
 
     assertThat(context.getCorrelationId()).isNull();

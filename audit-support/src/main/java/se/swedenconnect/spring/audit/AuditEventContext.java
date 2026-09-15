@@ -17,13 +17,14 @@ package se.swedenconnect.spring.audit;
 
 import org.jspecify.annotations.Nullable;
 import se.swedenconnect.spring.audit.support.ApplicationName;
+import se.swedenconnect.spring.audit.support.ApplicationVersion;
 import se.swedenconnect.spring.audit.tracing.CorrelationID;
 import se.swedenconnect.spring.audit.tracing.TraceID;
 
 /**
  * Context that may be used by an {@link se.swedenconnect.spring.audit.transform.EventTransformer EventTransformer} when
- * building an {@link AuditEvent}. It carries the ambient information (correlation ID, trace ID, application name, and
- * principal) that may not be part of the source event itself.
+ * building an {@link AuditEvent}. It carries the ambient information (correlation ID, trace ID, application name,
+ * application version, and principal) that may not be part of the source event itself.
  * <p>
  * A transformer that creates its audit event using an {@link AuditEventBuilder} may hand the context to the builder,
  * see {@link AuditEventBuilder#builder(AuditEventContext)}. The builder is then initialized with the values of the
@@ -40,6 +41,16 @@ public interface AuditEventContext {
    * @return the application name, or {@code null}
    */
   @Nullable ApplicationName getApplicationName();
+
+  /**
+   * Gets the version of the application that produced the event.
+   * <p>
+   * The version is optional. An application that can not determine its version reports {@code null}.
+   * </p>
+   *
+   * @return the application version, or {@code null}
+   */
+  @Nullable ApplicationVersion getApplicationVersion();
 
   /**
    * Gets the correlation ID that ties the event to a specific flow or session.

@@ -21,6 +21,7 @@ import org.springframework.boot.actuate.audit.AuditEvent;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.util.StringUtils;
+import se.swedenconnect.spring.audit.support.Application;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -35,14 +36,16 @@ import java.util.Optional;
  * {@link org.springframework.jdbc.core.JdbcTemplate JdbcTemplate}.
  * <p>
  * Each audit event is stored as a single row. A set of flat columns ({@code event_time}, {@code principal},
- * {@code event_type}, {@code application_name}, {@code correlation_id}) is used for querying, while the complete event
- * is stored as JSON in the {@code event_data} column using an {@link AuditEventMapper}. On read, the event is
- * reconstructed from the {@code event_data} column, so no information is lost. Timestamps are stored in UTC.
+ * {@code event_type}, {@code application_name}, {@code application_version}, {@code correlation_id}) is used for
+ * querying, while the complete event is stored as JSON in the {@code event_data} column using an
+ * {@link AuditEventMapper}. The two application columns are taken from the {@code application} field of a structured
+ * event. On read, the event is reconstructed from the {@code event_data} column, so no information is lost. Timestamps
+ * are stored in UTC.
  * </p>
  * <p>
  * The table name is configurable (defaulting to {@value #DEFAULT_TABLE_NAME}); the column names are fixed. See
- * {@code docs/jdbc.md} for the DDL. An application whose schema differs should implement {@link JdbcAuditEventDao}
- * directly instead of using this class.
+ * {@code docs/repositories.md} for the DDL. An application whose schema differs should implement
+ * {@link JdbcAuditEventDao} directly instead of using this class.
  * </p>
  *
  * @author Martin Lindström
@@ -92,8 +95,8 @@ public class DefaultJdbcAuditEventDao implements JdbcAuditEventDao {
     final String table = Optional.ofNullable(tableName).filter(StringUtils::hasText).orElse(DEFAULT_TABLE_NAME);
     this.rowMapper = (rs, rowNum) -> this.eventMapper.read(rs.getString("event_data"));
     this.insertSql = ("INSERT INTO %s "
-        + "(event_time, principal, event_type, application_name, correlation_id, event_data) "
-        + "VALUES (?, ?, ?, ?, ?, ?)").formatted(table);
+        + "(event_time, principal, event_type, application_name, application_version, correlation_id, event_data) "
+        + "VALUES (?, ?, ?, ?, ?, ?, ?)").formatted(table);
     this.selectSql = "SELECT event_data FROM %s".formatted(table);
   }
 
@@ -102,8 +105,11 @@ public class DefaultJdbcAuditEventDao implements JdbcAuditEventDao {
   public void save(final @NonNull AuditEvent event) {
     final se.swedenconnect.spring.audit.AuditEvent structured =
         event instanceof final se.swedenconnect.spring.audit.AuditEvent e ? e : null;
-    final String applicationName = structured != null && structured.getApplicationName() != null
-        ? structured.getApplicationName().getName() : null;
+    final Application application = structured != null ? structured.getApplication() : null;
+    final String applicationName = application != null && application.getName() != null
+        ? application.getName().getName() : null;
+    final String applicationVersion = application != null && application.getVersion() != null
+        ? application.getVersion().getVersion() : null;
     final String correlationId = structured != null && structured.getCorrelationId() != null
         ? structured.getCorrelationId().getValue() : null;
 
@@ -112,6 +118,7 @@ public class DefaultJdbcAuditEventDao implements JdbcAuditEventDao {
         event.getPrincipal(),
         event.getType(),
         applicationName,
+        applicationVersion,
         correlationId,
         this.eventMapper.write(event));
   }

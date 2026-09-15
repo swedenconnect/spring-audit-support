@@ -16,6 +16,9 @@
 package se.swedenconnect.spring.audit;
 
 import org.junit.jupiter.api.Test;
+import se.swedenconnect.spring.audit.support.Application;
+import se.swedenconnect.spring.audit.support.ApplicationName;
+import se.swedenconnect.spring.audit.support.ApplicationVersion;
 import se.swedenconnect.spring.audit.tracing.CorrelationID;
 import se.swedenconnect.spring.audit.tracing.TraceID;
 import se.swedenconnect.spring.audit.value.StringAuditValue;
@@ -51,6 +54,7 @@ class AuditEventBuilderTest {
     assertThat(builder.type(AuditType.of("login"))).isSameAs(builder);
     assertThat(builder.timestamp(TIMESTAMP)).isSameAs(builder);
     assertThat(builder.principal("alice")).isSameAs(builder);
+    assertThat(builder.applicationVersion(new ApplicationVersion("1.2.3"))).isSameAs(builder);
     assertThat(builder.correlationId(CorrelationID.generate())).isSameAs(builder);
     assertThat(builder.rootField(new StringAuditValue("r", "v"))).isSameAs(builder);
     assertThat(builder.dataField(new StringAuditValue("d", "v"))).isSameAs(builder);
@@ -218,13 +222,125 @@ class AuditEventBuilderTest {
     final AuditEvent event = AuditEventBuilder.builder()
         .type("login")
         .applicationName((String) null)
+        .applicationVersion((String) null)
         .correlationId((String) null)
         .traceId((String) null)
         .build();
 
-    assertThat(event.getApplicationName()).isNull();
+    assertThat(event.getApplication()).isNull();
     assertThat(event.getCorrelationId()).isNull();
     assertThat(event.getTraceId()).isNull();
+  }
+
+  @Test
+  void testNoApplicationGivesNoApplicationObject() {
+    final AuditEvent event = AuditEventBuilder.builder()
+        .type("login")
+        .build();
+
+    assertThat(event.getApplication()).isNull();
+  }
+
+  @Test
+  void testApplicationNameOnly() {
+    final AuditEvent event = AuditEventBuilder.builder()
+        .type("login")
+        .applicationName("my-app")
+        .build();
+
+    assertThat(event.getApplication()).isEqualTo(new Application(new ApplicationName("my-app"), null));
+  }
+
+  @Test
+  void testApplicationVersionFromString() {
+    final AuditEvent event = AuditEventBuilder.builder()
+        .type("login")
+        .applicationVersion("1.2.3")
+        .build();
+
+    assertThat(event.getApplication()).isEqualTo(new Application(null, new ApplicationVersion("1.2.3")));
+  }
+
+  @Test
+  void testApplicationVersionAsValueType() {
+    final AuditEvent event = AuditEventBuilder.builder()
+        .type("login")
+        .applicationVersion(new ApplicationVersion("1.2.3"))
+        .build();
+
+    assertThat(event.getApplication()).isEqualTo(new Application(null, new ApplicationVersion("1.2.3")));
+  }
+
+  @Test
+  void testBuilderFromContext() {
+    final AuditEvent event = AuditEventBuilder.builder(
+            context(new ApplicationName("my-app"), new ApplicationVersion("1.2.3")))
+        .type("login")
+        .build();
+
+    assertThat(event.getApplication())
+        .isEqualTo(new Application(new ApplicationName("my-app"), new ApplicationVersion("1.2.3")));
+    assertThat(event.getCorrelationId()).isEqualTo(CorrelationID.of("corr-123"));
+    assertThat(event.getPrincipal()).isEqualTo("alice");
+  }
+
+  @Test
+  void testBuilderFromContextWithoutApplicationVersion() {
+    final AuditEvent event = AuditEventBuilder.builder(context(new ApplicationName("my-app"), null))
+        .type("login")
+        .build();
+
+    assertThat(event.getApplication()).isEqualTo(new Application(new ApplicationName("my-app"), null));
+  }
+
+  @Test
+  void testApplicationVersionFromContextMayBeOverridden() {
+    final AuditEvent event = AuditEventBuilder.builder(
+            context(new ApplicationName("my-app"), new ApplicationVersion("1.2.3")))
+        .type("login")
+        .applicationVersion("4.5.6")
+        .build();
+
+    assertThat(event.getApplication())
+        .isEqualTo(new Application(new ApplicationName("my-app"), new ApplicationVersion("4.5.6")));
+  }
+
+  /**
+   * Creates an {@link AuditEventContext} holding the supplied application name and version.
+   *
+   * @param applicationName the application name
+   * @param applicationVersion the application version (may be null)
+   * @return an {@link AuditEventContext}
+   */
+  private static AuditEventContext context(
+      final ApplicationName applicationName, final ApplicationVersion applicationVersion) {
+    return new AuditEventContext() {
+
+      @Override
+      public ApplicationName getApplicationName() {
+        return applicationName;
+      }
+
+      @Override
+      public ApplicationVersion getApplicationVersion() {
+        return applicationVersion;
+      }
+
+      @Override
+      public CorrelationID getCorrelationId() {
+        return CorrelationID.of("corr-123");
+      }
+
+      @Override
+      public TraceID getTraceId() {
+        return TraceID.of("4bf92f3577b34da6a3ce929d0e0e4736");
+      }
+
+      @Override
+      public String getPrincipal() {
+        return "alice";
+      }
+    };
   }
 
 }

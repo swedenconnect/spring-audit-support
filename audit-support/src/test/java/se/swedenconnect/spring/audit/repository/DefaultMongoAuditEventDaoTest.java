@@ -17,6 +17,7 @@ package se.swedenconnect.spring.audit.repository;
 
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
+import org.bson.Document;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,7 +28,9 @@ import org.testcontainers.containers.MongoDBContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import se.swedenconnect.spring.audit.AuditEventBuilder;
+import se.swedenconnect.spring.audit.support.Application;
 import se.swedenconnect.spring.audit.support.ApplicationName;
+import se.swedenconnect.spring.audit.support.ApplicationVersion;
 import se.swedenconnect.spring.audit.tracing.CorrelationID;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -92,8 +95,70 @@ class DefaultMongoAuditEventDaoTest {
     assertThat(structured.getType()).isEqualTo("login");
     assertThat(structured.getPrincipal()).isEqualTo("alice");
     assertThat(structured.getTimestamp()).isEqualTo(Instant.parse("2026-01-01T10:00:00Z"));
-    assertThat(structured.getApplicationName()).isEqualTo(new ApplicationName("app"));
+    assertThat(structured.getApplication())
+        .isEqualTo(new Application(new ApplicationName("app"), new ApplicationVersion("1.2.3")));
     assertThat(structured.getCorrelationId()).isEqualTo(new CorrelationID("corr-login"));
+  }
+
+  @Test
+  void testQueryableFieldsAreWritten() {
+    this.dao.save(event("login", "alice", "2026-01-01T10:00:00Z"));
+
+    final Document document = mongoTemplate.findAll(Document.class, COLLECTION).get(0);
+    assertThat(document.getString("applicationName")).isEqualTo("app");
+    assertThat(document.getString("applicationVersion")).isEqualTo("1.2.3");
+  }
+
+  @Test
+  void testEventWithoutApplicationVersion() {
+    this.dao.save(AuditEventBuilder.builder()
+        .type("login")
+        .principal("alice")
+        .timestamp(Instant.parse("2026-01-01T10:00:00Z"))
+        .applicationName("app")
+        .build());
+
+    final Document document = mongoTemplate.findAll(Document.class, COLLECTION).get(0);
+    assertThat(document.getString("applicationVersion")).isNull();
+
+    final se.swedenconnect.spring.audit.AuditEvent structured =
+        (se.swedenconnect.spring.audit.AuditEvent) this.dao.findRecent(1).get(0);
+    assertThat(structured.getApplication()).isEqualTo(new Application(new ApplicationName("app"), null));
+  }
+
+  @Test
+  void testEventWithoutApplicationName() {
+    this.dao.save(AuditEventBuilder.builder()
+        .type("login")
+        .principal("alice")
+        .timestamp(Instant.parse("2026-01-01T10:00:00Z"))
+        .applicationVersion("1.2.3")
+        .build());
+
+    final Document document = mongoTemplate.findAll(Document.class, COLLECTION).get(0);
+    assertThat(document.getString("applicationName")).isNull();
+    assertThat(document.getString("applicationVersion")).isEqualTo("1.2.3");
+
+    final se.swedenconnect.spring.audit.AuditEvent structured =
+        (se.swedenconnect.spring.audit.AuditEvent) this.dao.findRecent(1).get(0);
+    assertThat(structured.getApplication()).isEqualTo(new Application(null, new ApplicationVersion("1.2.3")));
+  }
+
+  @Test
+  void testEventWithoutApplication() {
+    this.dao.save(AuditEventBuilder.builder()
+        .type("login")
+        .principal("alice")
+        .timestamp(Instant.parse("2026-01-01T10:00:00Z"))
+        .build());
+
+    final Document document = mongoTemplate.findAll(Document.class, COLLECTION).get(0);
+    assertThat(document.getString("applicationName")).isNull();
+    assertThat(document.getString("applicationVersion")).isNull();
+
+    final se.swedenconnect.spring.audit.AuditEvent structured =
+        (se.swedenconnect.spring.audit.AuditEvent) this.dao.findRecent(1).get(0);
+    assertThat(structured.getApplication()).isNull();
   }
 
   @Test
@@ -149,6 +214,7 @@ class DefaultMongoAuditEventDaoTest {
         .principal(principal)
         .timestamp(Instant.parse(timestamp))
         .applicationName("app")
+        .applicationVersion("1.2.3")
         .correlationId("corr-" + type)
         .build();
   }

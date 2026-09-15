@@ -17,7 +17,9 @@ package se.swedenconnect.spring.audit;
 
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import se.swedenconnect.spring.audit.support.Application;
 import se.swedenconnect.spring.audit.support.ApplicationName;
+import se.swedenconnect.spring.audit.support.ApplicationVersion;
 import se.swedenconnect.spring.audit.tracing.CorrelationID;
 import se.swedenconnect.spring.audit.tracing.TraceID;
 import se.swedenconnect.spring.audit.value.AuditValue;
@@ -49,6 +51,9 @@ public class AuditEventBuilder {
   /** The application name. */
   private ApplicationName applicationName;
 
+  /** The application version. */
+  private ApplicationVersion applicationVersion;
+
   /** The correlation ID. */
   private CorrelationID correlationId;
 
@@ -71,13 +76,13 @@ public class AuditEventBuilder {
    * Creates a builder based on an {@link AuditEventContext}.
    * <p>
    * The following fields are initialized from the context (if present):
-   *   <ul>
-   *     <li>{@code application_name}</li>
-   *     <li>{@code correlation_id}</li>
-   *     <li>{@code trace_id}</li>
-   *     <li>{@code principal}</li>
-   *   </ul>
    * </p>
+   * <ul>
+   *   <li>the application name and version, i.e., the {@code application} field</li>
+   *   <li>{@code correlation_id}</li>
+   *   <li>{@code trace_id}</li>
+   *   <li>{@code principal}</li>
+   * </ul>
    * <p>
    *   Note: Properties initialized from the context may be overridden by invoking builder methods.
    * </p>
@@ -86,6 +91,7 @@ public class AuditEventBuilder {
    */
   public AuditEventBuilder(final @NonNull AuditEventContext context) {
     this.applicationName = context.getApplicationName();
+    this.applicationVersion = context.getApplicationVersion();
     this.correlationId = context.getCorrelationId();
     this.traceId = context.getTraceId();
     this.principal = context.getPrincipal();
@@ -112,14 +118,18 @@ public class AuditEventBuilder {
 
   /**
    * Builds the {@link AuditEvent} from the assigned properties.
+   * <p>
+   * The assigned application name and version are assembled into the {@link Application} of the event. If neither has
+   * been assigned, the event carries no application at all.
+   * </p>
    *
    * @return an {@link AuditEvent}
    * @throws NullPointerException if no audit type has been assigned
    */
   public @NonNull AuditEvent build() throws NullPointerException {
     return new AuditEvent(Objects.requireNonNull(this.type, "type must be assigned"),
-        this.timestamp, this.applicationName, this.correlationId, this.traceId, this.principal, this.rootFields,
-        this.dataFields);
+        this.timestamp, new Application(this.applicationName, this.applicationVersion), this.correlationId,
+        this.traceId, this.principal, this.rootFields, this.dataFields);
   }
 
   /**
@@ -210,6 +220,28 @@ public class AuditEventBuilder {
    */
   public @NonNull AuditEventBuilder applicationName(final @Nullable String applicationName) {
     this.applicationName = applicationName != null ? new ApplicationName(applicationName) : null;
+    return this;
+  }
+
+  /**
+   * Assigns the version of the application that produced the event.
+   *
+   * @param applicationVersion the application version (or {@code null})
+   * @return this builder
+   */
+  public @NonNull AuditEventBuilder applicationVersion(final @Nullable ApplicationVersion applicationVersion) {
+    this.applicationVersion = applicationVersion;
+    return this;
+  }
+
+  /**
+   * Assigns the version of the application that produced the event, given its string representation.
+   *
+   * @param applicationVersion the application version (or {@code null})
+   * @return this builder
+   */
+  public @NonNull AuditEventBuilder applicationVersion(final @Nullable String applicationVersion) {
+    this.applicationVersion = applicationVersion != null ? new ApplicationVersion(applicationVersion) : null;
     return this;
   }
 
