@@ -24,7 +24,7 @@
   <parent>
     <groupId>se.swedenconnect.spring.audit</groupId>
     <artifactId>audit-support-parent</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.0.1-SNAPSHOT</version>
   </parent>
 
   <name>Sweden Connect :: Spring Audit Support :: Core Library</name>
@@ -107,7 +107,6 @@
     <dependency>
       <groupId>com.cloudbees</groupId>
       <artifactId>syslog-java-client</artifactId>
-      <version>1.1.7</version>
       <optional>true</optional>
     </dependency>
 

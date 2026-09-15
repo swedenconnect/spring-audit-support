@@ -26,7 +26,7 @@ public final class LibraryVersion {
 
   private static final int MAJOR = 1;
   private static final int MINOR = 0;
-  private static final int PATCH = 0;
+  private static final int PATCH = 1;
 
   /**
    * Global serialization value for Audit Support classes.
