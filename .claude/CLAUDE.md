@@ -136,7 +136,21 @@ classpath-discovered annotation processors implicitly, so no metadata file is cu
 
 ## Release
 
-Use the `release` profile to attach source/Javadoc JARs and sign artifacts with GPG before publishing to Maven Central:
+Pushing a tag `v<version>` publishes the release. The `maven-central-deploy.yml` workflow first checks, using
+`.github/scripts/check-release-version.sh`, that the version is not a snapshot and that the tag matches the version of
+every POM. It then runs a full build with tests and deploys the parent POM and all modules to Maven Central, using the
+`release` profile and signing as the swedenconnect-bot user. The `github-release.yml` workflow creates the GitHub
+release from the same tag. A version on Maven Central can not be removed or replaced, so set the release version in all
+POMs before tagging.
+
+Test the check script after changing it:
+
+```bash
+.github/scripts/check-release-version-test.sh
+```
+
+A manual deploy from a developer machine is still possible. It uses the `release` profile to attach source/Javadoc
+JARs and sign artifacts with GPG, and needs the `central` server in your own `settings.xml`:
 
 ```bash
 mvn clean deploy -Prelease
