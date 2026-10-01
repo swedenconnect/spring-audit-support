@@ -39,9 +39,13 @@ import se.swedenconnect.spring.audit.repository.InMemoryAuditEventRepository;
 import se.swedenconnect.spring.audit.repository.DefaultJdbcAuditEventDao;
 import se.swedenconnect.spring.audit.repository.DefaultMongoAuditEventDao;
 import se.swedenconnect.spring.audit.repository.JdbcAuditEventDao;
+import se.swedenconnect.spring.audit.repository.SyslogAuditEventRepository;
 
 import javax.sql.DataSource;
 import java.io.CharArrayWriter;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -425,6 +429,102 @@ class AuditRepositoryAutoConfigurationTest {
         .run(context -> assertThat(context).hasSingleBean(AuditEventRepository.class));
   }
 
+  @Test
+  void testSyslogDisabledIgnoresProvidedBean() {
+    try (final CapturingSender sender = new CapturingSender()) {
+      this.runner
+          .withBean(SyslogMessageSender.class, () -> sender)
+          .withPropertyValues("audit.repository.syslog.enabled=false")
+          .run(context -> {
+            assertThat(delegates(context)).noneMatch(r -> r instanceof SyslogAuditEventRepository);
+            context.getBean(AuditEventRepository.class).add(new AuditEvent("alice", "login", Map.of()));
+            assertThat(sender.messages).isEmpty();
+          });
+    }
+  }
+
+  @Test
+  void testStartsWithoutSyslogOnClasspath() {
+    withoutSyslog().run(context -> {
+      assertThat(context).hasNotFailed();
+      assertThat(delegateClassNames(context)).containsExactly(InMemoryAuditEventRepository.class.getName());
+    });
+  }
+
+  @Test
+  void testStartsWithoutSyslogOnClasspathWhenOtherRepositoriesConfigured(@TempDir final Path directory) {
+    withoutSyslog()
+        .withPropertyValues(
+            "audit.repository.file.log-file=" + directory.resolve("audit.log"),
+            "audit.repository.in-memory.capacity=10")
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          assertThat(delegateClassNames(context)).containsExactly(
+              FileBasedAuditEventRepository.class.getName(), InMemoryAuditEventRepository.class.getName());
+        });
+  }
+
+  @Test
+  void testSyslogConfiguredWithoutSyslogOnClasspath() {
+    withoutSyslog()
+        .withPropertyValues("audit.repository.syslog.host=127.0.0.1")
+        .run(context -> {
+          assertThat(context).hasFailed();
+          assertThat(context).getFailure()
+              .hasMessageContaining("audit.repository.syslog is configured, but this requires syslog-java-client");
+          for (Throwable t = context.getStartupFailure(); t != null; t = t.getCause()) {
+            assertThat(t).isNotInstanceOfAny(NoClassDefFoundError.class, ClassNotFoundException.class);
+          }
+        });
+  }
+
+  @Test
+  void testSyslogDisabledWithoutSyslogOnClasspath() {
+    withoutSyslog()
+        .withPropertyValues(
+            "audit.repository.syslog.enabled=false",
+            "audit.repository.syslog.host=127.0.0.1")
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          assertThat(delegateClassNames(context)).containsExactly(InMemoryAuditEventRepository.class.getName());
+        });
+  }
+
+  /**
+   * Returns a runner where {@code syslog-java-client} is not available. The auto-configuration (and the rest of the
+   * library) is loaded by a {@link SyslogHidingClassLoader}, so that a reference to a syslog class anywhere in the
+   * library fails the same way as in an application without {@code syslog-java-client}.
+   *
+   * @return an {@link ApplicationContextRunner}
+   */
+  private static ApplicationContextRunner withoutSyslog() {
+    final SyslogHidingClassLoader classLoader =
+        new SyslogHidingClassLoader(AuditRepositoryAutoConfigurationTest.class.getClassLoader());
+    try {
+      return new ApplicationContextRunner()
+          .withClassLoader(classLoader)
+          .withConfiguration(AutoConfigurations.of(
+              classLoader.loadClass(AuditRepositoryAutoConfiguration.class.getName())));
+    }
+    catch (final ClassNotFoundException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  /**
+   * Returns the class names of the repositories that the {@link DelegatingAuditEventRepository} delegates to. Class
+   * names are used since the repositories may have been loaded by another class loader.
+   *
+   * @param context the application context
+   * @return a list of class names
+   */
+  private static List<String> delegateClassNames(final ApplicationContext context) {
+    final List<?> repositories =
+        (List<?>) ReflectionTestUtils.getField(context.getBean(AuditEventRepository.class), "repositories");
+    assertThat(repositories).isNotNull();
+    return repositories.stream().map(r -> r.getClass().getName()).toList();
+  }
+
   /**
    * Supplies an H2 data source with the audit table created.
    */
@@ -497,6 +597,60 @@ class AuditRepositoryAutoConfigurationTest {
 
     @Override
     public void close() {
+    }
+  }
+
+  /**
+   * A class loader where the {@code syslog-java-client} classes are not available. The library classes are defined by
+   * this class loader (rather than by its parent), so that the syslog classes they refer to are resolved through it.
+   */
+  static class SyslogHidingClassLoader extends ClassLoader {
+
+    static {
+      registerAsParallelCapable();
+    }
+
+    /**
+     * Constructor.
+     *
+     * @param parent the parent class loader
+     */
+    SyslogHidingClassLoader(final ClassLoader parent) {
+      super(parent);
+    }
+
+    @Override
+    protected Class<?> loadClass(final String name, final boolean resolve) throws ClassNotFoundException {
+      if (name.startsWith("com.cloudbees.syslog.")) {
+        throw new ClassNotFoundException(name);
+      }
+      if (!name.startsWith("se.swedenconnect.spring.audit.")) {
+        return super.loadClass(name, resolve);
+      }
+      synchronized (this.getClassLoadingLock(name)) {
+        Class<?> c = this.findLoadedClass(name);
+        if (c == null) {
+          try (final InputStream in = this.getParent().getResourceAsStream(name.replace('.', '/') + ".class")) {
+            if (in == null) {
+              throw new ClassNotFoundException(name);
+            }
+            final byte[] bytes = in.readAllBytes();
+            c = this.defineClass(name, bytes, 0, bytes.length);
+          }
+          catch (final IOException e) {
+            throw new ClassNotFoundException(name, e);
+          }
+        }
+        if (resolve) {
+          this.resolveClass(c);
+        }
+        return c;
+      }
+    }
+
+    @Override
+    public URL getResource(final String name) {
+      return name.startsWith("com/cloudbees/syslog/") ? null : super.getResource(name);
     }
   }
 }
