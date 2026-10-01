@@ -6,7 +6,7 @@
 
 ### Version 1.0.1
 
-**Date:** _Not yet released_
+**Date:** 2026-10-01
 
 - Fixed startup failure when `syslog-java-client` is not on the classpath ([#6](https://github.com/swedenconnect/spring-audit-support/issues/6)).
 
