@@ -47,6 +47,7 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.util.Assert;
+import org.springframework.util.ClassUtils;
 import org.springframework.util.StringUtils;
 import se.swedenconnect.spring.audit.repository.AbstractAuditEventRepository;
 import se.swedenconnect.spring.audit.repository.AuditEventDao;
@@ -237,23 +238,32 @@ public class AuditRepositoryAutoConfiguration {
   /**
    * Condition that matches if a repository has been configured, i.e., if any setting under its configuration
    * properties prefix has been assigned, or if the application has supplied a bean that sets the repository up.
+   * <p>
+   * The type of the activating bean is given by name and is resolved when the condition is evaluated. This way, a type
+   * from an optional dependency is not loaded when the condition is created, which Spring does before evaluating any
+   * other condition (such as {@link ConditionalOnClass}) on the same class.
+   * </p>
    */
   abstract static class OnRepositoryConfiguredCondition implements Condition {
 
     /** The configuration properties prefix for the repository. */
     private final String prefix;
 
-    /** The type of an application supplied bean that also sets the repository up, or {@code null} if there is none. */
-    private final @Nullable Class<?> activatingBeanType;
+    /**
+     * The class name of an application supplied bean that also sets the repository up, or {@code null} if there is
+     * none.
+     */
+    private final @Nullable String activatingBeanType;
 
     /**
      * Constructor.
      *
      * @param prefix the configuration properties prefix for the repository
-     * @param activatingBeanType the type of an application supplied bean that also sets the repository up, or
+     * @param activatingBeanType the class name of an application supplied bean that also sets the repository up, or
      *     {@code null} if there is none
      */
-    protected OnRepositoryConfiguredCondition(final String prefix, final @Nullable Class<?> activatingBeanType) {
+    protected OnRepositoryConfiguredCondition(final @NonNull String prefix,
+        final @Nullable String activatingBeanType) {
       this.prefix = prefix;
       this.activatingBeanType = activatingBeanType;
     }
@@ -268,8 +278,12 @@ public class AuditRepositoryAutoConfiguration {
       if (binder.bind(this.prefix, Bindable.mapOf(String.class, String.class)).isBound()) {
         return true;
       }
-      return this.activatingBeanType != null && context.getBeanFactory() != null
-          && context.getBeanFactory().getBeanNamesForType(this.activatingBeanType, true, false).length > 0;
+      if (this.activatingBeanType == null || context.getBeanFactory() == null
+          || !ClassUtils.isPresent(this.activatingBeanType, context.getClassLoader())) {
+        return false;
+      }
+      final Class<?> type = ClassUtils.resolveClassName(this.activatingBeanType, context.getClassLoader());
+      return context.getBeanFactory().getBeanNamesForType(type, true, false).length > 0;
     }
   }
 
@@ -278,7 +292,7 @@ public class AuditRepositoryAutoConfiguration {
 
     /** Constructor. */
     OnJdbcConfigured() {
-      super("audit.repository.jdbc", JdbcAuditEventDao.class);
+      super("audit.repository.jdbc", JdbcAuditEventDao.class.getName());
     }
   }
 
@@ -287,7 +301,7 @@ public class AuditRepositoryAutoConfiguration {
 
     /** Constructor. */
     OnMongoConfigured() {
-      super("audit.repository.mongo", MongoAuditEventDao.class);
+      super("audit.repository.mongo", MongoAuditEventDao.class.getName());
     }
   }
 
@@ -303,9 +317,9 @@ public class AuditRepositoryAutoConfiguration {
   /** Matches if audit logging to syslog has been configured. */
   static class OnSyslogConfigured extends OnRepositoryConfiguredCondition {
 
-    /** Constructor. */
+    /** Constructor. The sender type is given by name, since syslog-java-client is an optional dependency. */
     OnSyslogConfigured() {
-      super("audit.repository.syslog", SyslogMessageSender.class);
+      super("audit.repository.syslog", "com.cloudbees.syslog.sender.SyslogMessageSender");
     }
   }
 
