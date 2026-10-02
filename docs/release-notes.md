@@ -8,7 +8,7 @@
 
 **Date:** _not yet released_
 
-- 
+- Fixed startup failure when the application has build information and `audit.app-version` is not set ([#10](https://github.com/swedenconnect/spring-audit-support/issues/10)).
 
 
 ### Version 1.0.1

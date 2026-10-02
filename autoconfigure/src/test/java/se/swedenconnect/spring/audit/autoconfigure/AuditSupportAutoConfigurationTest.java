@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.actuate.audit.AuditEventRepository;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -293,22 +294,60 @@ class AuditSupportAutoConfigurationTest {
     });
   }
 
+  /**
+   * A runner that also loads Spring Boot's {@link ProjectInfoAutoConfiguration}, which creates the
+   * {@link BuildProperties} bean from the supplied build information file.
+   *
+   * @param buildInfo the name of the build information file under build-info in the test resources
+   * @return an {@link ApplicationContextRunner}
+   */
+  private ApplicationContextRunner buildInfoRunner(final @NonNull String buildInfo) {
+    return this.runner
+        .withConfiguration(AutoConfigurations.of(ProjectInfoAutoConfiguration.class))
+        .withPropertyValues("spring.info.build.location=classpath:build-info/" + buildInfo);
+  }
+
   @Test
   void testApplicationVersionFromBuildProperties() {
+    this.buildInfoRunner("with-version.properties").run(context -> {
+      assertThat(context).hasNotFailed();
+      assertThat(context).hasSingleBean(BuildProperties.class);
+      assertThat(context.getBean(ApplicationVersion.class)).isEqualTo(new ApplicationVersion("4.5.6"));
+      assertThat(context.getBean(AuditEventContextResolver.class).getContext(null).getApplicationVersion())
+          .isEqualTo(new ApplicationVersion("4.5.6"));
+    });
+  }
+
+  @Test
+  void testApplicationVersionFromUserBuildPropertiesBean() {
+    this.buildInfoRunner("with-version.properties")
+        .withBean(BuildProperties.class, () -> buildProperties("build-app", "7.8.9"))
+        .run(context -> assertThat(context.getBean(ApplicationVersion.class))
+            .isEqualTo(new ApplicationVersion("7.8.9")));
+  }
+
+  @Test
+  void testApplicationVersionFromBuildInfoWhenUserBuildPropertiesBeanHasNoVersion() {
+    this.buildInfoRunner("with-version.properties")
+        .withBean(BuildProperties.class, () -> buildProperties("build-app", null))
+        .run(context -> assertThat(context.getBean(ApplicationVersion.class))
+            .isEqualTo(new ApplicationVersion("4.5.6")));
+  }
+
+  @Test
+  void testBuildPropertiesBeanWithoutBuildInfoGivesNoApplicationVersion() {
     this.runner
         .withBean(BuildProperties.class, () -> buildProperties("build-app", "4.5.6"))
         .run(context -> {
-          assertThat(context.getBean(ApplicationVersion.class)).isEqualTo(new ApplicationVersion("4.5.6"));
-          assertThat(context.getBean(AuditEventContextResolver.class).getContext(null).getApplicationVersion())
-              .isEqualTo(new ApplicationVersion("4.5.6"));
+          assertThat(context).hasNotFailed();
+          assertThat(context).doesNotHaveBean(ApplicationVersion.class);
         });
   }
 
   @Test
   void testApplicationVersionPropertyTakesPrecedenceOverBuildProperties() {
-    this.runner
+    this.buildInfoRunner("with-version.properties")
         .withPropertyValues("audit.app-version=1.2.3")
-        .withBean(BuildProperties.class, () -> buildProperties("build-app", "4.5.6"))
         .run(context -> assertThat(context.getBean(ApplicationVersion.class))
             .isEqualTo(new ApplicationVersion("1.2.3")));
   }
@@ -325,14 +364,13 @@ class AuditSupportAutoConfigurationTest {
 
   @Test
   void testBuildPropertiesWithoutVersionGivesNoApplicationVersion() {
-    this.runner
-        .withBean(BuildProperties.class, () -> buildProperties("build-app", null))
-        .run(context -> {
-          assertThat(context).hasNotFailed();
-          assertThat(context).doesNotHaveBean(ApplicationVersion.class);
-          assertThat(context.getBean(AuditEventContextResolver.class).getContext(null).getApplicationVersion())
-              .isNull();
-        });
+    this.buildInfoRunner("without-version.properties").run(context -> {
+      assertThat(context).hasNotFailed();
+      assertThat(context).hasSingleBean(BuildProperties.class);
+      assertThat(context).doesNotHaveBean(ApplicationVersion.class);
+      assertThat(context.getBean(AuditEventContextResolver.class).getContext(null).getApplicationVersion())
+          .isNull();
+    });
   }
 
   @Test
