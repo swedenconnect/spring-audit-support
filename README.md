@@ -3,7 +3,7 @@
 
 # Spring Audit Support
 
-![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)
+![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg) [![Maven Central](https://img.shields.io/maven-central/v/se.swedenconnect.spring.audit/audit-support.svg)](https://central.sonatype.com/artifact/se.swedenconnect.spring.audit/audit-support)
 
 A framework for audit logging in Spring applications.
 
