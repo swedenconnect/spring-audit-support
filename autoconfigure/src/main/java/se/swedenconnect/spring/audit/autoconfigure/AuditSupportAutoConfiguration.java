@@ -15,14 +15,16 @@
  */
 package se.swedenconnect.spring.audit.autoconfigure;
 
+import java.io.IOException;
 import java.util.Objects;
 import java.util.Optional;
 
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.BeanCreationException;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionMessage;
 import org.springframework.boot.autoconfigure.condition.ConditionOutcome;
@@ -37,6 +39,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.ConditionContext;
 import org.springframework.core.env.Environment;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.ResourceLoader;
+import org.springframework.core.io.support.PropertiesLoaderUtils;
 import org.springframework.core.type.AnnotatedTypeMetadata;
 import org.springframework.util.StringUtils;
 import se.swedenconnect.spring.audit.AuditApplicationListener;
@@ -64,6 +69,15 @@ import se.swedenconnect.spring.audit.support.ApplicationVersion;
 @AutoConfiguration(after = ProjectInfoAutoConfiguration.class)
 @EnableConfigurationProperties(AuditSupportProperties.class)
 public class AuditSupportAutoConfiguration {
+
+  /** Logger. */
+  private static final Logger log = LoggerFactory.getLogger(AuditSupportAutoConfiguration.class);
+
+  /** The property holding the location of the build information file. Same as Spring Boot uses. */
+  private static final String BUILD_INFO_LOCATION_PROPERTY = "spring.info.build.location";
+
+  /** The default location of the build information file. */
+  private static final String DEFAULT_BUILD_INFO_LOCATION = "classpath:META-INF/build-info.properties";
 
   /** The Spring environment, used to resolve the application name. */
   private final Environment environment;
@@ -183,34 +197,68 @@ public class AuditSupportAutoConfiguration {
   /**
    * Creates the {@link ApplicationVersion} bean.
    * <p>
-   * The version is resolved from the first available of: the {@code audit.app-version} property, or the version from
-   * the {@link BuildProperties} (if available). Unlike the application name, the version is optional - if it can not
-   * be determined, no bean is created and the audit events simply carry no version.
+   * The version is resolved from the first available of: the {@code audit.app-version} property, the version from the
+   * {@link BuildProperties} bean (if available), or the version from the build information file. Unlike the
+   * application name, the version is optional - if it can not be determined, no bean is created and the audit events
+   * simply carry no version.
    * </p>
    *
    * @param properties the audit support properties
    * @param buildProperties provider for the build properties, which may be absent
+   * @param resourceLoader the resource loader used to locate the build information file
    * @return an {@link ApplicationVersion}
    */
   @Bean
   @ConditionalOnMissingBean
   @Conditional(OnApplicationVersionAvailableCondition.class)
   @NonNull ApplicationVersion applicationVersion(final @NonNull AuditSupportProperties properties,
-      final @NonNull ObjectProvider<BuildProperties> buildProperties) {
+      final @NonNull ObjectProvider<BuildProperties> buildProperties, final @NonNull ResourceLoader resourceLoader) {
 
     final String applicationVersion = Optional.ofNullable(properties.getAppVersion())
         .filter(StringUtils::hasText)
-        .orElseGet(() -> Optional.ofNullable(buildProperties.getIfAvailable())
+        .or(() -> Optional.ofNullable(buildProperties.getIfAvailable())
             .map(BuildProperties::getVersion)
-            .orElse(null));
+            .filter(StringUtils::hasText))
+        .orElseGet(() -> readBuildInfoVersion(this.environment, resourceLoader));
 
     // The condition above has already established that a version is available.
     return new ApplicationVersion(Objects.requireNonNull(applicationVersion, "applicationVersion must not be null"));
   }
 
   /**
+   * Reads the version from the build information file, i.e., the file pointed out by {@code spring.info.build.location}
+   * ({@code classpath:META-INF/build-info.properties} by default). This is the same file that Spring Boot creates the
+   * {@link BuildProperties} bean from.
+   *
+   * @param environment the Spring environment
+   * @param resourceLoader the resource loader used to locate the file
+   * @return the version, or {@code null} if there is no build information file, or if it holds no version
+   */
+  static @Nullable String readBuildInfoVersion(final @NonNull Environment environment,
+      final @NonNull ResourceLoader resourceLoader) {
+    final Resource resource = resourceLoader.getResource(
+        environment.getProperty(BUILD_INFO_LOCATION_PROPERTY, DEFAULT_BUILD_INFO_LOCATION));
+    if (!resource.exists()) {
+      return null;
+    }
+    try {
+      final String version = PropertiesLoaderUtils.loadProperties(resource).getProperty("build.version");
+      return StringUtils.hasText(version) ? version : null;
+    }
+    catch (final IOException e) {
+      log.warn("Failed to read build information from {} - no application version from build information", resource,
+          e);
+      return null;
+    }
+  }
+
+  /**
    * Condition that matches when an application version can be determined, i.e., when the {@code audit.app-version}
-   * property is assigned, or when a {@link BuildProperties} bean carrying a version is available.
+   * property is assigned, or when the build information file holds a version.
+   * <p>
+   * The condition reads the build information file instead of asking for the {@link BuildProperties} bean, since a
+   * condition is evaluated before beans can be created.
+   * </p>
    */
   static class OnApplicationVersionAvailableCondition extends SpringBootCondition {
 
@@ -227,12 +275,8 @@ public class AuditSupportAutoConfiguration {
       if (StringUtils.hasText(context.getEnvironment().getProperty(PROPERTY))) {
         return ConditionOutcome.match(message.because(PROPERTY + " is assigned"));
       }
-      final ConfigurableListableBeanFactory beanFactory = context.getBeanFactory();
-      final BuildProperties build = beanFactory != null
-          ? beanFactory.getBeanProvider(BuildProperties.class).getIfAvailable()
-          : null;
-      if (build != null && build.getVersion() != null) {
-        return ConditionOutcome.match(message.because("a BuildProperties bean holding a version is available"));
+      if (readBuildInfoVersion(context.getEnvironment(), context.getResourceLoader()) != null) {
+        return ConditionOutcome.match(message.because("the build information holds a version"));
       }
       return ConditionOutcome.noMatch(
           message.because("neither " + PROPERTY + " nor a build version is available"));
