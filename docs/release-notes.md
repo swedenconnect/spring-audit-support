@@ -2,14 +2,19 @@
 
 # Release Notes
 
-![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)
+![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg) [![Maven Central](https://img.shields.io/maven-central/v/se.swedenconnect.spring.audit/audit-support.svg)](https://central.sonatype.com/artifact/se.swedenconnect.spring.audit/audit-support)
+
+### Version 1.0.3
+
+**Date:** _not yet released_
+
+-
 
 ### Version 1.0.2
 
 **Date:** 2026-10-02
 
 - Fixed startup failure when the application has build information and `audit.app-version` is not set ([#10](https://github.com/swedenconnect/spring-audit-support/issues/10)).
-
 
 ### Version 1.0.1
 
